@@ -3,12 +3,21 @@ import pandas as pd
 import joblib
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+import platform
 from matplotlib import font_manager, rc
 
 # Windows에서는 'malgun.ttf' (맑은 고딕)를 사용
-font_path = "C:/Windows/Fonts/malgun.ttf"
-font_name = font_manager.FontProperties(fname=font_path).get_name()
-rc('font', family=font_name)
+if platform.system() == "Windows":
+    font_path = "C:/Windows/Fonts/malgun.ttf"
+else:
+    font_path = os.path.join("fonts", "malgun.ttf")  # 프로젝트에 복사한 폰트
+
+if os.path.exists(font_path):
+    font_name = font_manager.FontProperties(fname=font_path).get_name()
+    rc('font', family=font_name)
+else:
+    print("⚠️ 폰트 파일을 찾을 수 없습니다:", font_path)
 
 # 마이너스 기호가 깨지는 현상 방지
 plt.rcParams['axes.unicode_minus'] = False

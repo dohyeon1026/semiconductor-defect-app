@@ -4,3 +4,5 @@ numpy
 scikit-learn
 joblib
 matplotlib
+os
+platform
