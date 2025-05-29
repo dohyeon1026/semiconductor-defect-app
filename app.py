@@ -131,12 +131,17 @@ variable_to_target = {
 }
 
 # --- 모델 불러오기 ---
+import os
+
 @st.cache_resource
 def load_models():
     models = {}
+    base_path = os.path.dirname(os.path.abspath(__file__))  # app.py의 절대 경로
     for col in target_cols:
-        models[col] = joblib.load(f"model{col}_model.pkl")
+        model_path = os.path.join(base_path, "model", f"{col}_model.pkl")
+        models[col] = joblib.load(model_path)
     return models
+
 
 # --- 예측 함수 ---
 def predict_all(input_data, full_df, models):
@@ -533,7 +538,7 @@ def page_prediction():
 
 def page_analysis():
     st.title("🔍 특정 공정 분석")
-    df = pd.read_csv("가상_공정_데이터.csv")
+    df = pd.read_csv("data/가상_공정_데이터.csv")
     models = load_models()
 
     # 사용자 입력
@@ -624,5 +629,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
