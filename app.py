@@ -142,7 +142,6 @@ def load_models():
         models[col] = joblib.load(model_path)
     return models
 
-
 # --- 예측 함수 ---
 def predict_all(input_data, full_df, models):
     row = pd.DataFrame([input_data], columns=input_cols)
@@ -174,8 +173,14 @@ def apply_correlation(variable_name, value, base_input):
     elif variable_name == 'fab_humidity':
         updated['coolant'] += 0.2 * (value - 40)
 
+    elif variable_name == 'blade_thickness':
+        updated['blade_speed'] -= 0.05 * (value - 0.3)
+
+    elif variable_name == 'SAW_fab_temp':
+        updated['blade_thickness'] -= 0.01 * (value - 22)
+
     elif variable_name == 'SAW_fab_humidity':
-        updated['feed_rate'] -= 0.1 * (value - 40)
+        updated['feed_rate'] -= 0.1 * (value - 40)  
 
     elif variable_name == 'Die_temp':
         updated['viscosity'] -= 20 * (value - 175)
@@ -198,14 +203,6 @@ def apply_correlation(variable_name, value, base_input):
     elif variable_name == 'Wire_fab_temp':
         updated['wire_diameter'] += 0.36 * (value - 22)
 
-    elif variable_name == 'wire_diameter':
-        ratio = (value - 203) / (381 - 203)
-        updated['bond_force_1'] = 35 + 15 * ratio
-        updated['bond_ultra_1'] = 35 + 15 * ratio
-        updated['bond_time_1'] = 10 + 10 * ratio
-        updated['bond_force_2'] = 90 + 40 * ratio
-        updated['bond_ultra_2'] = 90 + 40 * ratio
-        updated['bond_time_2'] = 10 + 10 * ratio
 
     elif variable_name in ['bond_force_1', 'bond_force_2']:
         total_force = (
@@ -225,10 +222,11 @@ def apply_correlation(variable_name, value, base_input):
     elif variable_name == 'Mold_fab_temp':
         updated['Mold_time'] += 10 * (22 - value)
 
-    elif variable_name == 'resin_viscosity':
-        ratio = (value - 1e7) / (1e8 - 1e7)
-        updated['Mold_pressure'] += 48 * ratio
-        updated['Mold_time'] += 100 * ratio
+    elif variable_name == 'Mold_pressure':
+        updated['resin_viscosity'] += 1e5 * (value - 128) / 48  # 반대 방향 정의
+
+    elif variable_name == 'Mold_time':
+        updated['resin_viscosity'] += 1e5 * (value - 250) / 100  
 
     elif variable_name == 'mark_laser_power':
         updated['mark_pulse_freq'] += 0.2 * (value - 16.5)
@@ -249,7 +247,7 @@ def apply_correlation(variable_name, value, base_input):
 
     return updated
 
-def apply_all_correlations(base_input, max_iter=10, tol=1e-3):
+def apply_all_correlations(base_input, max_iter=20, tol=1e-12):
     prev = base_input.copy()
     for _ in range(max_iter):
         updated = prev.copy()
@@ -325,28 +323,21 @@ def plot_defect_trend(variable_name, user_input, df, models):
     ax_total.legend()
     ax_total.grid(True)
 
-       # 그래프3: 공정 변수 → 공정별 불량률 (기본 vs 상관관계 반영)
+    # 그래프3: 공정 변수 → 공정별 불량률 (기본 vs 상관관계 반영)
     fig_corr_proc, ax_corr_proc = plt.subplots(figsize=(8, 4))
-
     for target in related_targets:
-        # 기본 예측 (상관관계 없음)
         base_preds = proc_preds[target]
-
-        # 상관관계 반영 예측
         corr_preds = []
         for val in values:
-            corr_input = apply_correlation(variable_name, val, base_input)
-            corr_input[variable_name] = val  # ⚠️ 변수 값 반영 보장!
+            temp_input = base_input.copy()
+            temp_input[variable_name] = val
+            corr_input = apply_all_correlations(temp_input)
             row_corr = pd.DataFrame([corr_input], columns=input_cols)
             pred_corr = models[target].predict(row_corr)[0]
             corr_preds.append(pred_corr * 100)
 
-        # 그래프에 두 곡선 모두 표시
         ax_corr_proc.plot(values, base_preds, label=f"{target} (기본)", linestyle='--', color='gray')
         ax_corr_proc.plot(values, corr_preds, label=f"{target} (상관관계 반영)")
-
-        # 사용자 입력 위치에 점 표시
-        idx = np.abs(values - base_input[variable_name]).argmin()
         ax_corr_proc.scatter([base_input[variable_name]], [base_preds[idx]], s=50, color='gray')
         ax_corr_proc.scatter([base_input[variable_name]], [corr_preds[idx]], s=50)
 
@@ -356,7 +347,9 @@ def plot_defect_trend(variable_name, user_input, df, models):
     ax_corr_proc.legend()
     ax_corr_proc.grid(True)
 
+    # 반환
     return fig_proc, fig_total, fig_corr_proc
+
 
 
 
@@ -477,6 +470,98 @@ def page_process_variable_info():
         """)
         st.image("images/mark.JPG", caption="마킹 공정 변수 설정 근거", use_column_width=True)
         st.image("images/mark_speed.JPG", caption="마킹 공정 변수 설정 근거", use_column_width=True)
+        
+def page_process_variable_correlation_info():
+    st.title("🔍 공정별 변수 상관관계 근거")
+
+    # 1단계: 공정 선택 메뉴
+    공정 = st.selectbox("공정을 선택하세요", [
+        "Back Grinding (백래핑)",
+        "Sawing (쏘잉)",
+        "Die Attach (다이 어태치)",
+        "Wire Bonding (와이어 본딩)",
+        "Molding (몰딩)",
+        "Marking (마킹)"
+    ])
+
+    if 공정 == "Back Grinding (백래핑)":
+        st.header("🌀 백래핑 공정 변수 상관관계 근거")
+        st.markdown("""
+        - **웨이퍼 두께 (150–450 µm)**:
+        - **연삭 속도 (25–100 rpm)**: 
+        - **냉각수 유량 (5–20 L/min)**: 
+        - **연삭 압력 (10–50 N)**: 
+        """)
+        st.image("images/backlap1.JPG", caption="백래핑 공정 변수 상관관계 근거", use_column_width=True)
+        st.image("images/backlap2.JPG", caption="백래핑 공정 변수 상관관계 근거", use_column_width=True)
+        st.image("images/backlap3.JPG", caption="백래핑 공정 변수 상관관계 근거", use_column_width=True)
+        st.image("images/backlap4.JPG", caption="백래핑 공정 변수 상관관계 근거", use_column_width=True)
+        st.image("images/backlap5.JPG", caption="백래핑 공정 변수 상관관계 근거", use_column_width=True)
+
+    elif 공정 == "Sawing (쏘잉)":
+        st.header("✂️ 쏘잉 공정 변수 상관관계 근거")
+        st.markdown("""
+        - **블레이드 두께 (15,60)(um)**:
+        - **웨이퍼 이송속도(7,15) (mm/s)**:
+        - **블레이드 회전속도(30,110) (m/s)**:
+        - **냉각수 유량(8,20) (L/min)**:          
+        """)
+        st.image("images/sawing1.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_column_width=True)
+        st.image("images/sawing2.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_column_width=True)
+        st.image("images/sawing3.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_column_width=True)
+        
+    elif 공정 == "Die Attach (다이 어태치)":
+         st.header("✂️ 다이 어태치 공정 변수 상관관계 근거")
+         st.markdown("""
+         - **접착 온도(150,200)(℃)**:
+         - **접착 압력(10,50) (Mpa)**:
+         - **접착 시간(10,60) (s)**:
+         - **접착제 점도(1000,4000)(Pa·s)**:            
+         """)
+         st.image("images/dieattach1.JPG", caption="다이 어태치 공정 변수 상관관계 근거", use_column_width=True) 
+         st.image("images/dieattach2.JPG", caption="다이 어태치 공정 변수 상관관계 근거", use_column_width=True)
+    
+    elif 공정 == "Wire Bonding (와이어 본딩)":
+        st.header("✂️ 와이어 본딩 공정 변수 상관관계 근거")
+        st.markdown("""
+        - **와이어 두께(203,381)um**:
+        - **1차 본드 하중 (35,50)gm**:
+        - **1차 본드 초음파 (35,50)Mw**:
+        - **1차 본드 시간 (10,20)ms**:
+        - **2차 본드 하중 (90~130)gm**:
+        - **2차 본드 초음파 (90~130)Mw**:
+        - **2차 본드 시간 (10~20)ms**:
+        - **초음파 주파수 (100,150) kHz**:            
+        """)
+        st.image("images/wirebond1.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_column_width=True)
+        st.image("images/wirebond2.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_column_width=True)
+        st.image("images/wirebond3.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_column_width=True)
+    
+    elif 공정 == "Molding (몰딩)":
+         st.header("✂️ 몰딩 공정 변수 상관관계 근거")
+         st.markdown("""
+         - **몰드 온도 : 150~200°C**:
+         - **몰드 압력 : 80 ~ 140bar**:
+         - **몰딩 시간 : 200 ~ 300s**:
+         - **몰드 레진 점도 : 10⁷ ~ 10⁸Pa·s**:            
+         """)
+         st.image("images/mold1.JPG", caption="몰딩 공정 변수 상관관계 근거", use_column_width=True)
+         st.image("images/mold2.JPG", caption="몰딩 공정 변수 상관관계 근거", use_column_width=True)
+         st.image("images/mold3.JPG", caption="몰딩 공정 변수 상관관계 근거", use_column_width=True)
+         st.image("images/mold4.JPG", caption="몰딩 공정 변수 상관관계 근거", use_column_width=True)
+         st.image("images/mold5.JPG", caption="몰딩 공정 변수 상관관계 근거", use_column_width=True)
+    
+    elif 공정 == "Marking (마킹)":
+        st.header("✂️ 마킹 공정 변수 상관관계 근거")
+        st.markdown("""
+        - **레이저 출력: 13 ~ 20W**:
+        - **펄스 주파수: 10 ~ 50kHz**:
+        - **마킹 속도: 67 ~ 200mm/s**:
+        - **마킹 깊이: 16 ~ 72µm**:            
+        """)
+        st.image("images/mark1.JPG", caption="마킹 공정 변수 상관관계 근거", use_column_width=True)
+        st.image("images/mark2.JPG", caption="마킹 공정 변수 상관관계 근거", use_column_width=True)
+
 
 def page_prediction():
     st.title("📦 불량률 예측")
@@ -496,17 +581,15 @@ def page_prediction():
     col1, col2 = st.columns(2)
     for i, col in enumerate(input_cols):
         min_val, max_val = range_dict[col]
-        default_val = st.session_state[col]
 
         with (col1 if i % 2 == 0 else col2):
             new_val = st.number_input(
                 f"{col} ({min_val}~{max_val})",
                 min_value=float(min_val),
                 max_value=float(max_val),
-                value=default_val,
                 key=col
             )
-            if abs(new_val - default_val) > 1e-6:
+            if abs(new_val - st.session_state[col]) > 1e-6:
                 changed_vars[col] = new_val
 
     # 3. 상관관계에 따른 자동 조정값 계산 (단, 위젯 값은 직접 수정 ❌)
@@ -616,12 +699,14 @@ def page_analysis():
 
 def main():
     st.sidebar.title("📂 메뉴")
-    page = st.sidebar.selectbox("이동할 페이지 선택", ["홈", "공정별 변수 설정 및 근거","불량률 예측", "특정 공정 분석"])
+    page = st.sidebar.selectbox("이동할 페이지 선택", ["홈", "공정별 변수 설정 및 근거","공정별 변수 상관관계 근거","불량률 예측", "특정 공정 분석"])
 
     if page == "홈":
         page_home()
     elif page == "공정별 변수 설정 및 근거":
         page_process_variable_info()
+    elif page == "공정별 변수 상관관계 근거":
+        page_process_variable_correlation_info()
     elif page == "불량률 예측":
         page_prediction()
     elif page == "특정 공정 분석":
@@ -629,4 +714,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
 
