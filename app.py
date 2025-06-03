@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import joblib
 import numpy as np
-import matplotlib.pyplot as plt
 import os
 import platform
+import matplotlib.pyplot as plt
 from matplotlib import font_manager, rc
 
 # Windows에서는 'malgun.ttf' (맑은 고딕)를 사용
@@ -601,6 +601,10 @@ def page_prediction():
     # 4. 예측 버튼
     if st.button("🚀 불량률 예측하기"):
         user_input = [adjusted_values[col] for col in input_cols]
+       
+        # ✅ 보정된 입력을 세션에 저장 (다른 페이지에서 사용 가능)
+        st.session_state["adjusted_input"] = adjusted_values.copy()
+
         result = predict_all(user_input, df, models)
 
         st.success(f"✅ 최종 공정 불량률: {result['final_defect']*100:.4f}%")
@@ -617,39 +621,42 @@ def page_prediction():
                 if abs(original - adjusted) > 1e-6:
                     st.write(f"🔁 **{col}**: 입력값 {original:.4f} → 보정값 {adjusted:.4f}")
 
-
-
 def page_analysis():
     st.title("🔍 특정 공정 분석")
     df = pd.read_csv("data/가상_공정_데이터.csv")
     models = load_models()
 
-    # 사용자 입력
-    user_input = []
-    for col in input_cols:
-        min_val, max_val = range_dict[col]
-        val = float((min_val + max_val) / 2)
-        user_input.append(val)
-
     st.subheader("📈 변수별 불량률 영향도")
     selected_var = st.selectbox("불량률 그래프를 보고 싶은 변수 선택", input_cols)
 
-    if st.button("🔍 그래프 보기"):
-        # ✅ 3개의 figure 받기
-        fig_proc, fig_total, fig_corr_proc = plot_defect_trend(selected_var, user_input, df, models)
+    # 사용자 입력 슬라이더 생성
+    user_input = []
+    for col in input_cols:
+        min_val, max_val = range_dict[col]
 
-        # 전체 불량률 그래프
+        default_val = st.session_state.get("adjusted_input", {}).get(col, float((min_val + max_val) / 2))
+
+        if col == selected_var:
+            val = st.slider(
+                f"{col} 값 선택",
+                min_value=float(min_val),
+                max_value=float(max_val),
+                value=default_val,
+                step=(max_val - min_val) / 100
+            )
+        else:
+            val = default_val
+
+        user_input.append(val)
+
+    if st.button("🔍 그래프 보기"):
+        fig_proc, fig_total, fig_corr_proc = plot_defect_trend(selected_var, user_input, df, models)
         st.markdown("**📊 전체 불량률 기준 그래프**")
         st.pyplot(fig_total)
-
-        # 해당 공정별 불량률 그래프
         st.markdown("**🔬 해당 공정 불량률 기준 그래프**")
         st.pyplot(fig_proc)
-
-        # 상관관계 반영 해당 공정 불량률 그래프
         st.markdown("**🧩 상관관계 반영 해당 공정 불량률 그래프**")
         st.pyplot(fig_corr_proc)
-
 
     st.markdown("---")
     st.subheader("📊 2D 변수 시각화")
@@ -659,23 +666,33 @@ def page_analysis():
     y_var = st.selectbox("Y축 선택", all_columns, index=1)
 
     if st.button("🎨 2D 분포 시각화"):
+        # x축 값 생성
         if x_var in df.columns:
-            x_vals = df[x_var]
+            x_vals = df[x_var].values
         else:
-            x_vals = np.array([predict_all(row[input_cols].values.tolist(), df, models)[x_var] for _, row in df.iterrows()])
+            x_vals = np.array([
+                predict_all(row[input_cols].values.tolist(), df, models)[x_var]
+                for _, row in df.iterrows()
+            ])
 
+        # y축 값 생성
         if y_var in df.columns:
-            y_vals = df[y_var]
+            y_vals = df[y_var].values
         else:
-            y_vals = np.array([predict_all(row[input_cols].values.tolist(), df, models)[y_var] for _, row in df.iterrows()])
+            y_vals = np.array([
+                predict_all(row[input_cols].values.tolist(), df, models)[y_var]
+                for _, row in df.iterrows()
+            ])
 
+        # 그래프 생성
         fig, ax = plt.subplots(figsize=(8, 6))
-        sc = ax.scatter(x_vals, y_vals, c=np.array(df["final_defect"])*100, cmap='plasma', alpha=0.6)
+        sc = ax.scatter(x_vals, y_vals, c=np.array(df["final_defect"]) * 100, cmap='plasma', alpha=0.6)
         ax.set_xlabel(x_var)
         ax.set_ylabel(y_var)
         ax.set_title(f"{x_var} vs {y_var} (컬러: 최종 불량률 %)")
         plt.colorbar(sc, label="최종 불량률 (%)")
 
+        # 입력값 기준 위치
         result = predict_all(user_input, df, models)
         user_x = user_input[input_cols.index(x_var)] if x_var in input_cols else result[x_var]
         user_y = user_input[input_cols.index(y_var)] if y_var in input_cols else result[y_var]
@@ -693,6 +710,7 @@ def page_analysis():
         for col in target_cols:
             st.write(f"{col}: {result[col]*100:.4f}%")
         st.success(f"🎯 총 불량률: {result['final_defect']*100:.4f}%")
+
 
 
 ### 🧠 메인 함수: 페이지 선택 구조 추가
@@ -714,6 +732,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
