@@ -167,59 +167,52 @@ def predict_all(input_data, full_df, models):
         result[d_col] = round(closest_row[d_col], 6)
     return result
 
-# --- 조정 제안 함수 (최적화 버전) ---
-def suggest_adjustments(models, user_input):
+@st.cache_data
+def suggest_adjustments_cached(user_input_tuple):
+    models = load_models()  # 캐시된 모델 내부에서 불러옴
+    current_vals = dict(zip(input_cols, list(user_input_tuple)))
     suggestions = {}
+
     for col in target_cols:
         model = models[col]
-        if hasattr(model, 'feature_importances_'):
-            current_vals = dict(zip(input_cols, user_input))
-
-            # 영향도 분석 (10 step으로 축소)
-            impacts = {}
-            for var in input_cols:
-                vals = np.linspace(range_dict[var][0], range_dict[var][1], 10)
-                preds = []
-                for v in vals:
-                    temp_input = current_vals.copy()
-                    temp_input[var] = v
-                    temp_input = apply_all_correlations(temp_input)
-                    row = pd.DataFrame([temp_input[col] for col in input_cols]).T
-                    row.columns = input_cols
-                    pred = model.predict(row)[0]
-                    preds.append(pred)
-                impacts[var] = max(preds) - min(preds)
-
-            most_impact_var = max(impacts, key=impacts.get)
-            current_val = current_vals[most_impact_var]
-            min_v, max_v = range_dict[most_impact_var]
-
-            # 최적값 탐색 (20 step으로 축소)
-            scan_vals = np.linspace(min_v, max_v, 20)
-            min_defect = float('inf')
-            optimal_val = current_val
-            for v in scan_vals:
-                temp_input = current_vals.copy()
-                temp_input[most_impact_var] = v
-                temp_input = apply_all_correlations(temp_input)
-                row = pd.DataFrame([temp_input[col] for col in input_cols]).T
+        impacts = {}
+        for var in input_cols:
+            vals = np.linspace(range_dict[var][0], range_dict[var][1], 10)
+            preds = []
+            for v in vals:
+                temp = current_vals.copy()
+                temp[var] = v
+                temp = apply_all_correlations(temp)
+                row = pd.DataFrame([temp[col] for col in input_cols]).T
                 row.columns = input_cols
-                pred = model.predict(row)[0]
-                if pred < min_defect:
-                    min_defect = pred
-                    optimal_val = v
+                preds.append(model.predict(row)[0])
+            impacts[var] = max(preds) - min(preds)
 
-            suggestions[col] = {
-                "variable": most_impact_var,
-                "current": current_val,
-                "optimal": optimal_val,
-                "suggestion": f"'{most_impact_var}' 값을 {optimal_val:.2f}로 설정하면 불량률을 최소화할 수 있습니다."
-            }
-    return suggestions
+        most_impact_var = max(impacts, key=impacts.get)
+        current_val = current_vals[most_impact_var]
+        min_v, max_v = range_dict[most_impact_var]
 
-@st.cache_data
-def suggest_adjustments_cached(models, user_input_tuple):
-    return suggest_adjustments(models, list(user_input_tuple))
+        scan_vals = np.linspace(min_v, max_v, 20)
+        min_defect = float('inf')
+        optimal_val = current_val
+        for v in scan_vals:
+            temp = current_vals.copy()
+            temp[most_impact_var] = v
+            temp = apply_all_correlations(temp)
+            row = pd.DataFrame([temp[col] for col in input_cols]).T
+            row.columns = input_cols
+            pred = model.predict(row)[0]
+            if pred < min_defect:
+                min_defect = pred
+                optimal_val = v
+        suggestions[col] = {
+            "variable": most_impact_var,
+            "current": current_val,
+            "optimal": optimal_val,
+            "suggestion": f"'{most_impact_var}' 값을 {optimal_val:.2f}로 설정하면 불량률을 최소화할 수 있습니다."
+}
+
+        return suggestions
 
 def apply_correlation(variable_name, value, base_input):
     updated = base_input.copy()
@@ -689,7 +682,7 @@ def page_prediction():
     # 조정 제안 버튼 (따로 실행)
     if st.button("🧠 조정 제안 보기"):
         user_input = [adjusted_values[col] for col in input_cols]
-        suggestions = suggest_adjustments_cached(models, tuple(user_input))
+        suggestions = suggest_adjustments_cached(tuple(user_input))
 
         st.markdown("---")
         st.subheader("💡 최적 변수 값 제안 (실제 영향 기준)")
