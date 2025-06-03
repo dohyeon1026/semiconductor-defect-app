@@ -31,18 +31,6 @@ def safe_image(path, caption="", **kwargs):
     except TypeError:
         st.image(path, caption=caption, **kwargs)
 
-# 📌 모델 로딩 함수 (캐싱)
-@st.cache_resource
-def load_models():
-    return {
-        "Backlap": joblib.load("backlap_defect_model.pkl"),
-        "Sawing": joblib.load("sawing_defect_model.pkl"),
-        "DieAttach": joblib.load("dieattach_defect_model.pkl"),
-        "WireBonding": joblib.load("wirebond_defect_model.pkl"),
-        "Molding": joblib.load("molding_defect_model.pkl"),
-        "Marking": joblib.load("marking_defect_model.pkl")
-    }
-
 # 1. 공정 변수 리스트
 input_cols = [
     'thickness', 'speed', 'coolant', 'LAP_pressure', 'fab_temp', 'fab_humidity',
@@ -152,9 +140,14 @@ variable_to_target = {
 # --- 모델 불러오기 ---
 import os
 
-@st.cache_data
-def load_data():
-    return pd.read_csv("data/가상_공정_데이터.csv")
+@st.cache_resource
+def load_models():
+    models = {}
+    base_path = os.path.dirname(os.path.abspath(__file__))  # app.py의 절대 경로
+    for col in target_cols:
+        model_path = os.path.join(base_path, "model", f"{col}_model.pkl")
+        models[col] = joblib.load(model_path)
+    return models
 
 # --- 예측 함수 ---
 def predict_all(input_data, full_df, models):
@@ -170,50 +163,59 @@ def predict_all(input_data, full_df, models):
         result[d_col] = round(closest_row[d_col], 6)
     return result
 
-@st.cache_data
-def suggest_adjustments_cached(user_input_tuple):
-    models = load_models()
-    current_vals = dict(zip(input_cols, list(user_input_tuple)))
+# --- 조정 제안 함수 (변경: 중요도 → 실제 영향 기준) ---
+def suggest_adjustments(models, user_input):
     suggestions = {}
-
     for col in target_cols:
         model = models[col]
-        impacts = {}
-        for var in input_cols:
-            vals = np.linspace(range_dict[var][0], range_dict[var][1], 10)
-            preds = []
-            for v in vals:
-                temp = current_vals.copy()
-                temp[var] = v
-                temp = apply_all_correlations(temp)
-                row = pd.DataFrame([temp[col] for col in input_cols]).T
+        if hasattr(model, 'feature_importances_'):
+            min_val = float('inf')
+            best_val = None
+            most_impact_var = None
+            current_vals = dict(zip(input_cols, user_input))
+
+            # 각 변수에 대해 현재값 유지 + 하나씩 바꿔가며 영향 평가
+            impacts = {}
+            for i, var in enumerate(input_cols):
+                vals = np.linspace(range_dict[var][0], range_dict[var][1], 20)
+                preds = []
+                for v in vals:
+                    temp_input = current_vals.copy()
+                    temp_input[var] = v
+                    temp_input = apply_all_correlations(temp_input)
+                    row = pd.DataFrame([temp_input[col] for col in input_cols]).T
+                    row.columns = input_cols
+                    pred = model.predict(row)[0]
+                    preds.append(pred)
+                impact = max(preds) - min(preds)
+                impacts[var] = impact
+
+            # 가장 영향이 큰 변수 찾기
+            most_impact_var = max(impacts, key=impacts.get)
+            current_val = current_vals[most_impact_var]
+            min_v, max_v = range_dict[most_impact_var]
+
+            # 최적값 탐색
+            scan_vals = np.linspace(min_v, max_v, 50)
+            min_defect = float('inf')
+            optimal_val = current_val
+            for v in scan_vals:
+                temp_input = current_vals.copy()
+                temp_input[most_impact_var] = v
+                temp_input = apply_all_correlations(temp_input)
+                row = pd.DataFrame([temp_input[col] for col in input_cols]).T
                 row.columns = input_cols
-                preds.append(model.predict(row)[0])
-            impacts[var] = max(preds) - min(preds)
+                pred = model.predict(row)[0]
+                if pred < min_defect:
+                    min_defect = pred
+                    optimal_val = v
 
-        most_impact_var = max(impacts, key=impacts.get)
-        current_val = current_vals[most_impact_var]
-        min_v, max_v = range_dict[most_impact_var]
-
-        scan_vals = np.linspace(min_v, max_v, 20)
-        min_defect = float('inf')
-        optimal_val = current_val
-        for v in scan_vals:
-            temp = current_vals.copy()
-            temp[most_impact_var] = v
-            temp = apply_all_correlations(temp)
-            row = pd.DataFrame([temp[col] for col in input_cols]).T
-            row.columns = input_cols
-            pred = model.predict(row)[0]
-            if pred < min_defect:
-                min_defect = pred
-                optimal_val = v
-        suggestions[col] = {
-            "variable": most_impact_var,
-            "current": current_val,
-            "optimal": optimal_val,
-            "suggestion": f"'{most_impact_var}' 값을 {optimal_val:.2f}로 설정하면 불량률을 최소화할 수 있습니다."
-        }
+            suggestions[col] = {
+                "variable": most_impact_var,
+                "current": current_val,
+                "optimal": optimal_val,
+                "suggestion": f"'{most_impact_var}' 값을 {optimal_val:.2f}로 설정하면 불량률을 최소화할 수 있습니다."
+            }
     return suggestions
 
 def apply_correlation(variable_name, value, base_input):
@@ -327,26 +329,23 @@ def apply_all_correlations(base_input, max_iter=20, tol=1e-12):
 # 3. 매핑 함수
 def get_related_targets(variable):
     return variable_to_target.get(variable, target_cols)
-
-# 캐싱된 그래프 생성 함수
-@st.cache_data(show_spinner=False)
-def cached_plot_defect_trend(variable_name, user_input_tuple, df, models):
-    user_input = list(user_input_tuple)
+                                  
+def plot_defect_trend(variable_name, user_input, df, models):
     base_input = dict(zip(input_cols, user_input))
     values = np.linspace(range_dict[variable_name][0], range_dict[variable_name][1], 100)
 
+    # 1) 공정별 불량률 예측
     related_targets = get_related_targets(variable_name)
     proc_preds = {target: [] for target in related_targets}
-
     for val in values:
         temp_input = base_input.copy()
         temp_input[variable_name] = val
         row = pd.DataFrame([temp_input], columns=input_cols)
         for target in related_targets:
-            pred = models[target].predict(row)[0]
-            proc_preds[target].append(pred * 100)
+            proc_pred = models[target].predict(row)[0]
+            proc_preds[target].append(proc_pred * 100)
 
-    # 전체 불량률 계산
+    # 2) 전체 불량률 예측
     total_preds = []
     for val in values:
         temp_input = base_input.copy()
@@ -355,7 +354,7 @@ def cached_plot_defect_trend(variable_name, user_input_tuple, df, models):
         pred_total = 1 - np.prod([1 - models[col].predict(row)[0] for col in target_cols])
         total_preds.append(pred_total * 100)
 
-    # 전체 불량률 (상관관계 반영)
+    # 3) 상관관계 반영 전체 불량률 예측
     total_preds_corr = []
     for val in values:
         corr_input = apply_correlation(variable_name, val, base_input)
@@ -363,7 +362,7 @@ def cached_plot_defect_trend(variable_name, user_input_tuple, df, models):
         pred_corr = 1 - np.prod([1 - models[col].predict(row_corr)[0] for col in target_cols])
         total_preds_corr.append(pred_corr * 100)
 
-    # 그래프 1: 공정별 불량률
+    # 그래프1: 공정별 불량률
     fig_proc, ax_proc = plt.subplots(figsize=(8, 4))
     for target in related_targets:
         ax_proc.plot(values, proc_preds[target], label=f"{target} 불량률 (%)")
@@ -376,7 +375,7 @@ def cached_plot_defect_trend(variable_name, user_input_tuple, df, models):
     ax_proc.legend()
     ax_proc.grid(True)
 
-    # 그래프 2: 전체 불량률
+    # 그래프2: 전체 불량률
     fig_total, ax_total = plt.subplots(figsize=(8, 4))
     ax_total.plot(values, total_preds, label="전체 불량률 (%)", color='tab:red')
     ax_total.scatter([base_input[variable_name]], [total_preds[idx]], color='red', s=50)
@@ -386,7 +385,7 @@ def cached_plot_defect_trend(variable_name, user_input_tuple, df, models):
     ax_total.legend()
     ax_total.grid(True)
 
-    # 그래프 3: 상관관계 반영 vs 기본 (공정별)
+    # 그래프3: 공정 변수 → 공정별 불량률 (기본 vs 상관관계 반영)
     fig_corr_proc, ax_corr_proc = plt.subplots(figsize=(8, 4))
     for target in related_targets:
         base_preds = proc_preds[target]
@@ -403,12 +402,14 @@ def cached_plot_defect_trend(variable_name, user_input_tuple, df, models):
         ax_corr_proc.plot(values, corr_preds, label=f"{target} (상관관계 반영)")
         ax_corr_proc.scatter([base_input[variable_name]], [base_preds[idx]], s=50, color='gray')
         ax_corr_proc.scatter([base_input[variable_name]], [corr_preds[idx]], s=50)
+
     ax_corr_proc.set_xlabel(variable_name)
     ax_corr_proc.set_ylabel("공정별 불량률 (%)")
     ax_corr_proc.set_title(f"'{variable_name}' 변화에 따른 공정별 불량률 (기본 vs 상관관계 반영)")
     ax_corr_proc.legend()
     ax_corr_proc.grid(True)
 
+    # 반환
     return fig_proc, fig_total, fig_corr_proc
 
 
@@ -634,46 +635,66 @@ def page_prediction():
     st.title("📦 불량률 예측")
     st.markdown("총 40개 이상의 공정 변수를 입력하면, 일부 변수는 상관관계에 따라 자동으로 보정됩니다.")
 
-    df = load_data()
+    df = pd.read_csv("data/가상_공정_데이터.csv")
     models = load_models()
 
-    # 페이지 진입 시 조정 제안 숨기기 초기화
-    if "show_suggestions" not in st.session_state or st.session_state.get("page_prediction_loaded", False) == False:
-        st.session_state["show_suggestions"] = False
-        st.session_state["page_prediction_loaded"] = True
-
-    # 초기값 설정
+    # 1. 초기값 설정
     for col in input_cols:
         if col not in st.session_state:
             min_val, max_val = range_dict[col]
             st.session_state[col] = float((min_val + max_val) / 2)
 
+    # 2. 입력 위젯 표시
     changed_vars = {}
     col1, col2 = st.columns(2)
     for i, col in enumerate(input_cols):
         min_val, max_val = range_dict[col]
+
         with (col1 if i % 2 == 0 else col2):
-            new_val = st.number_input(f"{col} ({min_val}~{max_val})", float(min_val), float(max_val), key=col)
+            new_val = st.number_input(
+                f"{col} ({min_val}~{max_val})",
+                min_value=float(min_val),
+                max_value=float(max_val),
+                key=col
+            )
             if abs(new_val - st.session_state[col]) > 1e-6:
                 changed_vars[col] = new_val
-                # 변수 변경되면 조정 제안 숨김 처리
-                st.session_state["show_suggestions"] = False
 
-    # 보정값 계산
+    # 3. 상관관계에 따른 자동 조정값 계산 (단, 위젯 값은 직접 수정 ❌)
     adjusted_values = {col: st.session_state[col] for col in input_cols}
     for changed_col, changed_val in changed_vars.items():
-        adjusted_values.update(apply_correlation(changed_col, changed_val, adjusted_values))
+        correlation_updates = apply_correlation(changed_col, changed_val, adjusted_values)
+        adjusted_values.update(correlation_updates)
 
-    # 예측 버튼
+    # 4. 예측 버튼
     if st.button("🚀 불량률 예측하기"):
         user_input = [adjusted_values[col] for col in input_cols]
+       
+        # ✅ 보정된 입력을 세션에 저장 (다른 페이지에서 사용 가능)
         st.session_state["adjusted_input"] = adjusted_values.copy()
+
         result = predict_all(user_input, df, models)
 
         st.success(f"✅ 최종 공정 불량률: {result['final_defect']*100:.4f}%")
         for col in target_cols:
             st.write(f"🔸 {col}: {result[col]*100:.4f}%")
 
+ # 🔍 조정 제안 출력
+        st.markdown("---")
+        st.subheader("💡 최적 변수 값 제안 (실제 영향 기준)")
+        suggestions = suggest_adjustments(models, user_input)
+        for col in target_cols:
+            if col in suggestions:
+                s = suggestions[col]
+                st.markdown(f"""
+                **{col}**
+                - 영향 큰 변수: `{s['variable']}`
+                - 현재 값: `{s['current']:.2f}`
+                - 최적 값: `{s['optimal']:.2f}`
+                - 제안: {s['suggestion']}
+                """)
+
+        # 조정된 값이 있다면 사용자에게 시각적으로 알려주기
         if len(changed_vars) > 0:
             st.markdown("---")
             st.subheader("🔧 자동 보정된 변수들:")
@@ -683,31 +704,6 @@ def page_prediction():
                 if abs(original - adjusted) > 1e-6:
                     st.write(f"🔁 **{col}**: 입력값 {original:.4f} → 보정값 {adjusted:.4f}")
 
-    # 조정 제안 보기 버튼 — 클릭 시에만 활성화
-    if st.button("🧠 조정 제안 보기"):
-        st.session_state["show_suggestions"] = True
-
-    # 조정 제안 출력 (버튼 클릭 시에만)
-    if st.session_state["show_suggestions"]:
-        with st.spinner("🔍 최적 변수 조합을 분석 중입니다..."):
-            user_input = [adjusted_values[col] for col in input_cols]
-            suggestions = suggest_adjustments_cached(tuple(user_input))
-
-            st.markdown("---")
-            st.subheader("💡 최적 변수 값 제안 (실제 영향 기준)")
-            # 모든 공정 변수 포함하여 제안 출력
-            for col in target_cols:
-                if col in suggestions:
-                    s = suggestions[col]
-                    st.markdown(f"""
-                    **{col}**
-                    - 영향 큰 변수: `{s['variable']}`
-                    - 현재 값: `{s['current']:.2f}`
-                    - 최적 값: `{s['optimal']:.2f}`
-                    - 제안: {s['suggestion']}
-                    """)
-
-                
 def page_analysis():
     st.title("🔍 특정 공정 분석")
     df = pd.read_csv("data/가상_공정_데이터.csv")
@@ -716,9 +712,11 @@ def page_analysis():
     st.subheader("📈 변수별 불량률 영향도")
     selected_var = st.selectbox("불량률 그래프를 보고 싶은 변수 선택", input_cols)
 
+    # 사용자 입력 슬라이더 생성
     user_input = []
     for col in input_cols:
         min_val, max_val = range_dict[col]
+
         default_val = st.session_state.get("adjusted_input", {}).get(col, float((min_val + max_val) / 2))
 
         if col == selected_var:
@@ -735,31 +733,13 @@ def page_analysis():
         user_input.append(val)
 
     if st.button("🔍 그래프 보기"):
-        user_input_tuple = tuple(user_input)
-        st.session_state["analysis_input"] = user_input_tuple
-        st.session_state["selected_var"] = selected_var
-
-    if "analysis_input" in st.session_state and "selected_var" in st.session_state:
-        user_input_tuple = st.session_state["analysis_input"]
-        selected_var = st.session_state["selected_var"]
-
-        # 그래프 생성 (캐싱된 함수 사용)
-        with st.spinner("📊 그래프 불러오는 중..."):
-            fig_proc, fig_total, fig_corr_proc = cached_plot_defect_trend(selected_var, user_input_tuple, df, models)
-
-        tabs = st.tabs(["📊 전체 불량률", "🔬 공정별 불량률", "🧩 상관관계 반영"])
-
-        with tabs[0]:
-            st.markdown("**📊 전체 불량률 기준 그래프**")
-            st.pyplot(fig_total)
-
-        with tabs[1]:
-            st.markdown("**🔬 해당 공정 불량률 기준 그래프**")
-            st.pyplot(fig_proc)
-
-        with tabs[2]:
-            st.markdown("**🧩 상관관계 반영 해당 공정 불량률 그래프**")
-            st.pyplot(fig_corr_proc)
+        fig_proc, fig_total, fig_corr_proc = plot_defect_trend(selected_var, user_input, df, models)
+        st.markdown("**📊 전체 불량률 기준 그래프**")
+        st.pyplot(fig_total)
+        st.markdown("**🔬 해당 공정 불량률 기준 그래프**")
+        st.pyplot(fig_proc)
+        st.markdown("**🧩 상관관계 반영 해당 공정 불량률 그래프**")
+        st.pyplot(fig_corr_proc)
 
     st.markdown("---")
     st.subheader("📊 2D 변수 시각화")
