@@ -31,6 +31,19 @@ def safe_image(path, caption="", **kwargs):
     except TypeError:
         st.image(path, caption=caption, **kwargs)
 
+# 📌 모델 로딩 함수 (캐싱)
+@st.cache_resource
+def load_models():
+    return {
+        "Backgrind": joblib.load("backgrind_model.pkl"),
+        "Sawing": joblib.load("sawing_model.pkl"),
+        "DieAttach": joblib.load("die_attach_model.pkl"),
+        "WireBonding": joblib.load("wirebond_model.pkl"),
+        "Molding": joblib.load("molding_model.pkl"),
+        "Marking": joblib.load("marking_model.pkl"),
+        "Total": joblib.load("total_defect_model.pkl")
+    }
+
 # 1. 공정 변수 리스트
 input_cols = [
     'thickness', 'speed', 'coolant', 'LAP_pressure', 'fab_temp', 'fab_humidity',
@@ -143,15 +156,6 @@ import os
 @st.cache_data
 def load_data():
     return pd.read_csv("data/가상_공정_데이터.csv")
-
-@st.cache_resource
-def load_models():
-    models = {}
-    base_path = os.path.dirname(os.path.abspath(__file__))  # app.py의 절대 경로
-    for col in target_cols:
-        model_path = os.path.join(base_path, "model", f"{col}_model.pkl")
-        models[col] = joblib.load(model_path)
-    return models
 
 # --- 예측 함수 ---
 def predict_all(input_data, full_df, models):
@@ -324,24 +328,26 @@ def apply_all_correlations(base_input, max_iter=20, tol=1e-12):
 # 3. 매핑 함수
 def get_related_targets(variable):
     return variable_to_target.get(variable, target_cols)
-                                  
+
+# 캐싱된 그래프 생성 함수
 @st.cache_data(show_spinner=False)
 def cached_plot_defect_trend(variable_name, user_input_tuple, df, models):
-    # user_input이 리스트라면 튜플로 바꿔서 캐싱 가능하도록 한다고 가정
     user_input = list(user_input_tuple)
     base_input = dict(zip(input_cols, user_input))
     values = np.linspace(range_dict[variable_name][0], range_dict[variable_name][1], 100)
 
     related_targets = get_related_targets(variable_name)
     proc_preds = {target: [] for target in related_targets}
+
     for val in values:
         temp_input = base_input.copy()
         temp_input[variable_name] = val
         row = pd.DataFrame([temp_input], columns=input_cols)
         for target in related_targets:
-            proc_pred = models[target].predict(row)[0]
-            proc_preds[target].append(proc_pred * 100)
+            pred = models[target].predict(row)[0]
+            proc_preds[target].append(pred * 100)
 
+    # 전체 불량률 계산
     total_preds = []
     for val in values:
         temp_input = base_input.copy()
@@ -350,6 +356,7 @@ def cached_plot_defect_trend(variable_name, user_input_tuple, df, models):
         pred_total = 1 - np.prod([1 - models[col].predict(row)[0] for col in target_cols])
         total_preds.append(pred_total * 100)
 
+    # 전체 불량률 (상관관계 반영)
     total_preds_corr = []
     for val in values:
         corr_input = apply_correlation(variable_name, val, base_input)
@@ -357,7 +364,7 @@ def cached_plot_defect_trend(variable_name, user_input_tuple, df, models):
         pred_corr = 1 - np.prod([1 - models[col].predict(row_corr)[0] for col in target_cols])
         total_preds_corr.append(pred_corr * 100)
 
-    # 그래프 생성 부분은 캐싱에서 빼도 된다 (복잡도 적음)
+    # 그래프 1: 공정별 불량률
     fig_proc, ax_proc = plt.subplots(figsize=(8, 4))
     for target in related_targets:
         ax_proc.plot(values, proc_preds[target], label=f"{target} 불량률 (%)")
@@ -370,6 +377,7 @@ def cached_plot_defect_trend(variable_name, user_input_tuple, df, models):
     ax_proc.legend()
     ax_proc.grid(True)
 
+    # 그래프 2: 전체 불량률
     fig_total, ax_total = plt.subplots(figsize=(8, 4))
     ax_total.plot(values, total_preds, label="전체 불량률 (%)", color='tab:red')
     ax_total.scatter([base_input[variable_name]], [total_preds[idx]], color='red', s=50)
@@ -379,6 +387,7 @@ def cached_plot_defect_trend(variable_name, user_input_tuple, df, models):
     ax_total.legend()
     ax_total.grid(True)
 
+    # 그래프 3: 상관관계 반영 vs 기본 (공정별)
     fig_corr_proc, ax_corr_proc = plt.subplots(figsize=(8, 4))
     for target in related_targets:
         base_preds = proc_preds[target]
@@ -395,7 +404,6 @@ def cached_plot_defect_trend(variable_name, user_input_tuple, df, models):
         ax_corr_proc.plot(values, corr_preds, label=f"{target} (상관관계 반영)")
         ax_corr_proc.scatter([base_input[variable_name]], [base_preds[idx]], s=50, color='gray')
         ax_corr_proc.scatter([base_input[variable_name]], [corr_preds[idx]], s=50)
-
     ax_corr_proc.set_xlabel(variable_name)
     ax_corr_proc.set_ylabel("공정별 불량률 (%)")
     ax_corr_proc.set_title(f"'{variable_name}' 변화에 따른 공정별 불량률 (기본 vs 상관관계 반영)")
@@ -709,11 +717,9 @@ def page_analysis():
     st.subheader("📈 변수별 불량률 영향도")
     selected_var = st.selectbox("불량률 그래프를 보고 싶은 변수 선택", input_cols)
 
-    # 사용자 입력 슬라이더 생성
     user_input = []
     for col in input_cols:
         min_val, max_val = range_dict[col]
-
         default_val = st.session_state.get("adjusted_input", {}).get(col, float((min_val + max_val) / 2))
 
         if col == selected_var:
@@ -731,13 +737,30 @@ def page_analysis():
 
     if st.button("🔍 그래프 보기"):
         user_input_tuple = tuple(user_input)
-        fig_proc, fig_total, fig_corr_proc = cached_plot_defect_trend(selected_var, user_input_tuple, df, models)
-        st.markdown("**📊 전체 불량률 기준 그래프**")
-        st.pyplot(fig_total)
-        st.markdown("**🔬 해당 공정 불량률 기준 그래프**")
-        st.pyplot(fig_proc)
-        st.markdown("**🧩 상관관계 반영 해당 공정 불량률 그래프**")
-        st.pyplot(fig_corr_proc)
+        st.session_state["analysis_input"] = user_input_tuple
+        st.session_state["selected_var"] = selected_var
+
+    if "analysis_input" in st.session_state and "selected_var" in st.session_state:
+        user_input_tuple = st.session_state["analysis_input"]
+        selected_var = st.session_state["selected_var"]
+
+        # 그래프 생성 (캐싱된 함수 사용)
+        with st.spinner("📊 그래프 불러오는 중..."):
+            fig_proc, fig_total, fig_corr_proc = cached_plot_defect_trend(selected_var, user_input_tuple, df, models)
+
+        tabs = st.tabs(["📊 전체 불량률", "🔬 공정별 불량률", "🧩 상관관계 반영"])
+
+        with tabs[0]:
+            st.markdown("**📊 전체 불량률 기준 그래프**")
+            st.pyplot(fig_total)
+
+        with tabs[1]:
+            st.markdown("**🔬 해당 공정 불량률 기준 그래프**")
+            st.pyplot(fig_proc)
+
+        with tabs[2]:
+            st.markdown("**🧩 상관관계 반영 해당 공정 불량률 그래프**")
+            st.pyplot(fig_corr_proc)
 
     st.markdown("---")
     st.subheader("📊 2D 변수 시각화")
