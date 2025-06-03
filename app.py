@@ -791,10 +791,10 @@ def page_analysis():
 
 
 
-### ?? 메인 함수: 페이지 선택 구조 추가
+###  메인 함수: 페이지 선택 구조 추가
 
 def main():
-    st.sidebar.title("?? 메뉴")
+    st.sidebar.title("메뉴")
     page = st.sidebar.selectbox("이동할 페이지 선택", ["홈", "공정별 변수 설정 및 근거","공정별 변수 상관관계 근거","불량률 예측", "특정 공정 분석"])
 
     if page == "홈":
