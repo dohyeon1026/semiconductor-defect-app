@@ -35,13 +35,12 @@ def safe_image(path, caption="", **kwargs):
 @st.cache_resource
 def load_models():
     return {
-        "Backgrind": joblib.load("backgrind_model.pkl"),
-        "Sawing": joblib.load("sawing_model.pkl"),
-        "DieAttach": joblib.load("die_attach_model.pkl"),
-        "WireBonding": joblib.load("wirebond_model.pkl"),
-        "Molding": joblib.load("molding_model.pkl"),
-        "Marking": joblib.load("marking_model.pkl"),
-        "Total": joblib.load("total_defect_model.pkl")
+        "Backgrind": joblib.load("backgrind_defect_model.pkl"),
+        "Sawing": joblib.load("sawing_defect_model.pkl"),
+        "DieAttach": joblib.load("die_attach_defect_model.pkl"),
+        "WireBonding": joblib.load("wirebond_defect_model.pkl"),
+        "Molding": joblib.load("molding_defect_model.pkl"),
+        "Marking": joblib.load("marking_defect_model.pkl")
     }
 
 # 1. 공정 변수 리스트
