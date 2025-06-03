@@ -17,7 +17,7 @@ if os.path.exists(font_path):
     font_name = font_manager.FontProperties(fname=font_path).get_name()
     rc('font', family=font_name)
 else:
-    print("?? 폰트 파일을 찾을 수 없습니다:", font_path)
+    print("⚠️ 폰트 파일을 찾을 수 없습니다:", font_path)
 
 # 마이너스 기호가 깨지는 현상 방지
 plt.rcParams['axes.unicode_minus'] = False
@@ -416,11 +416,11 @@ def plot_defect_trend(variable_name, user_input, df, models):
 
 
 
-# ?? 페이지 구성 함수 정의
+# 📁 페이지 구성 함수 정의
 def page_home():
-   st.title("?? 홈")
+   st.title("🏠 홈")
    st.markdown("""
-   ### ?? 반도체 패키징 공정이란?
+   ### 📦 반도체 패키징 공정이란?
    반도체 패키징 공정은 웨이퍼에서 개별 칩을 분리하고 외부 환경으로부터 보호하면서 전기적 연결을 제공하는 일련의 공정입니다.
    각 공정은 제품의 신뢰성과 성능에 중대한 영향을 미칩니다.
    아래는 주요 공정의 흐름도입니다.
@@ -430,7 +430,7 @@ def page_home():
    safe_image("images/Package.JPG", caption="반도체 패키징 공정 전체 흐름", use_container_width=True)
    st.markdown("""
    ---
-   ### ?? 주요 공정 설명
+   ### 🧩 주요 공정 설명
 
    - **Backlap (백래핑)**: 웨이퍼의 뒷면을 연마해 두께를 조절하고 스트레스를 해소하는 공정입니다.
    - **Sawing (쏘잉)**: 개별 칩을 잘라내는 공정입니다.
@@ -438,10 +438,16 @@ def page_home():
    - **Wire Bonding (와이어 본딩)**: 칩과 기판을 금속 와이어로 연결해 전기적 신호를 전달합니다.
    - **Molding (몰딩)**: 칩을 보호하기 위해 수지로 밀봉합니다.
    - **Marking (마킹)**: 제품 정보나 로고 등을 인쇄합니다.
-   이러한 공정 중 어느 하나라도 최적 조건을 벗어나면 불량률이 증가하게 됩니다.
-   본 시스템은 각 공정의 변수들을 입력 받아, 예측 모델을 통해 **불량률을 추정**하고 시각화해줍니다.
 
-   ### ?? 주요 기능
+   ### 📦반도체 패키징 공정 불량 예측 시스템이란? 
+   반도체 패키징공정에서의 6개의 공정과정과 그에 따른 40개의 공정변수를 입력하면 
+   패키징 공정에서의 불량률을 미리 예측 할 수 있는 프로그램.
+   또한, 특정 공정 분석을 통해 각 공정 변수의 불량률 그래프와
+   2D 산점도 등 데이터를 그래프로 나타내어 더 상세한 분석이 가능함.
+   
+   
+   ###
+   ### 🎯 주요 기능
    
    가상 실험 환경 제공: 실제 공정 데이터를 기반으로 구성된 변수 및 상관관계를 반영하여, 다양한 조건에서의 불량률을 시뮬레이션할 수 있습니다.
 
@@ -451,7 +457,7 @@ def page_home():
    """)
 
 def page_process_variable_info():
-    st.title("?? 공정별 변수 설정 및 근거")
+    st.title("🔍 공정별 변수 설정 및 근거")
 
     # 1단계: 공정 선택 메뉴
     공정 = st.selectbox("공정을 선택하세요", [
@@ -464,18 +470,18 @@ def page_process_variable_info():
     ])
 
     if 공정 == "Back Grinding (백래핑)":
-        st.header("?? 백래핑 공정 변수 및 근거")
+        st.header("🌀 백래핑 공정 변수 및 근거")
         st.markdown("""
-        - **웨이퍼 두께 (150?450 μm)**:
-        - **연삭 속도 (25?100 rpm)**: 
-        - **냉각수 유량 (5?20 L/min)**: 
-        - **연삭 압력 (10?50 N)**: 
+        - **웨이퍼 두께 (150–450 µm)**:
+        - **연삭 속도 (25–100 rpm)**: 
+        - **냉각수 유량 (5–20 L/min)**: 
+        - **연삭 압력 (10–50 N)**: 
         """)
         safe_image("images/thickness_speed.JPG", caption="백래핑 공정 변수 설정 근거", use_container_width=True)
         safe_image("images/coolant_LAP_pressure.JPG", caption="백래핑 공정 변수 설정 근거", use_container_width=True)
 
     elif 공정 == "Sawing (쏘잉)":
-        st.header("?? 쏘잉 공정 변수 및 근거")
+        st.header("✂️ 쏘잉 공정 변수 및 근거")
         st.markdown("""
         - **블레이드 두께 (15,60)(um)**:
         - **웨이퍼 이송속도(7,15) (mm/s)**:
@@ -485,7 +491,7 @@ def page_process_variable_info():
         safe_image("images/sawing.JPG", caption="쏘잉 공정 변수 설정 근거", use_container_width=True)
         
     elif 공정 == "Die Attach (다이 어태치)":
-         st.header("?? 다이 어태치 공정 변수 및 근거")
+         st.header("✂️ 다이 어태치 공정 변수 및 근거")
          st.markdown("""
          - **접착 온도(150,200)(℃)**:
          - **접착 압력(10,50) (Mpa)**:
@@ -496,7 +502,7 @@ def page_process_variable_info():
          safe_image("images/Die.JPG", caption="다이 어태치 공정 변수 설정 근거", use_container_width=True)
     
     elif 공정 == "Wire Bonding (와이어 본딩)":
-        st.header("?? 와이어 본딩 공정 변수 및 근거")
+        st.header("✂️ 와이어 본딩 공정 변수 및 근거")
         st.markdown("""
         - **와이어 두께(203,381)um**:
         - **1차 본드 하중 (35,50)gm**:
@@ -511,30 +517,30 @@ def page_process_variable_info():
         safe_image("images/ultra_freq.JPG", caption="와이어 본딩 공정 변수 설정 근거", use_container_width=True)
     
     elif 공정 == "Molding (몰딩)":
-         st.header("?? 몰딩 공정 변수 및 근거")
+         st.header("✂️ 몰딩 공정 변수 및 근거")
          st.markdown("""
          - **몰드 온도 : 150~200°C**:
          - **몰드 압력 : 80 ~ 140bar**:
          - **몰딩 시간 : 200 ~ 300s**:
-         - **몰드 레진 점도 : 10? ~ 10?Pa·s**:            
+         - **몰드 레진 점도 : 10⁷ ~ 10⁸Pa·s**:            
          """)
          safe_image("images/Mold_temp.JPG", caption="몰딩 공정 변수 설정 근거", use_container_width=True)
          safe_image("images/Mold_time.JPG", caption="몰딩 공정 변수 설정 근거", use_container_width=True)
          safe_image("images/resin_viscosity.JPG", caption="몰딩 공정 변수 설정 근거", use_container_width=True)
     
     elif 공정 == "Marking (마킹)":
-        st.header("?? 마킹 공정 변수 및 근거")
+        st.header("✂️ 마킹 공정 변수 및 근거")
         st.markdown("""
         - **레이저 출력: 13 ~ 20W**:
         - **펄스 주파수: 10 ~ 50kHz**:
         - **마킹 속도: 67 ~ 200mm/s**:
-        - **마킹 깊이: 16 ~ 72μm**:            
+        - **마킹 깊이: 16 ~ 72µm**:            
         """)
         safe_image("images/mark.JPG", caption="마킹 공정 변수 설정 근거", use_container_width=True)
         safe_image("images/mark_speed.JPG", caption="마킹 공정 변수 설정 근거", use_container_width=True)
         
 def page_process_variable_correlation_info():
-    st.title("?? 공정별 변수 상관관계 근거")
+    st.title("🔍 공정별 변수 상관관계 근거")
 
     # 1단계: 공정 선택 메뉴
     공정 = st.selectbox("공정을 선택하세요", [
@@ -547,12 +553,12 @@ def page_process_variable_correlation_info():
     ])
 
     if 공정 == "Back Grinding (백래핑)":
-        st.header("?? 백래핑 공정 변수 상관관계 근거")
+        st.header("🌀 백래핑 공정 변수 상관관계 근거")
         st.markdown("""
-        - **웨이퍼 두께 (150?450 μm)**:
-        - **연삭 속도 (25?100 rpm)**: 
-        - **냉각수 유량 (5?20 L/min)**: 
-        - **연삭 압력 (10?50 N)**: 
+        - **웨이퍼 두께 (150–450 µm)**:
+        - **연삭 속도 (25–100 rpm)**: 
+        - **냉각수 유량 (5–20 L/min)**: 
+        - **연삭 압력 (10–50 N)**: 
         """)
         safe_image("images/backlap1.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
         safe_image("images/backlap2.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
@@ -561,7 +567,7 @@ def page_process_variable_correlation_info():
         safe_image("images/backlap5.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
 
     elif 공정 == "Sawing (쏘잉)":
-        st.header("?? 쏘잉 공정 변수 상관관계 근거")
+        st.header("✂️ 쏘잉 공정 변수 상관관계 근거")
         st.markdown("""
         - **블레이드 두께 (15,60)(um)**:
         - **웨이퍼 이송속도(7,15) (mm/s)**:
@@ -573,7 +579,7 @@ def page_process_variable_correlation_info():
         safe_image("images/sawing3.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_container_width=True)
         
     elif 공정 == "Die Attach (다이 어태치)":
-         st.header("?? 다이 어태치 공정 변수 상관관계 근거")
+         st.header("✂️ 다이 어태치 공정 변수 상관관계 근거")
          st.markdown("""
          - **접착 온도(150,200)(℃)**:
          - **접착 압력(10,50) (Mpa)**:
@@ -584,7 +590,7 @@ def page_process_variable_correlation_info():
          safe_image("images/dieattach2.JPG", caption="다이 어태치 공정 변수 상관관계 근거", use_container_width=True)
     
     elif 공정 == "Wire Bonding (와이어 본딩)":
-        st.header("?? 와이어 본딩 공정 변수 상관관계 근거")
+        st.header("✂️ 와이어 본딩 공정 변수 상관관계 근거")
         st.markdown("""
         - **와이어 두께(203,381)um**:
         - **1차 본드 하중 (35,50)gm**:
@@ -600,12 +606,12 @@ def page_process_variable_correlation_info():
         safe_image("images/wirebond3.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_container_width=True)
     
     elif 공정 == "Molding (몰딩)":
-         st.header("?? 몰딩 공정 변수 상관관계 근거")
+         st.header("✂️ 몰딩 공정 변수 상관관계 근거")
          st.markdown("""
          - **몰드 온도 : 150~200°C**:
          - **몰드 압력 : 80 ~ 140bar**:
          - **몰딩 시간 : 200 ~ 300s**:
-         - **몰드 레진 점도 : 10? ~ 10?Pa·s**:            
+         - **몰드 레진 점도 : 10⁷ ~ 10⁸Pa·s**:            
          """)
          safe_image("images/mold1.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
          safe_image("images/mold2.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
@@ -614,12 +620,12 @@ def page_process_variable_correlation_info():
          safe_image("images/mold5.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
     
     elif 공정 == "Marking (마킹)":
-        st.header("?? 마킹 공정 변수 상관관계 근거")
+        st.header("✂️ 마킹 공정 변수 상관관계 근거")
         st.markdown("""
         - **레이저 출력: 13 ~ 20W**:
         - **펄스 주파수: 10 ~ 50kHz**:
         - **마킹 속도: 67 ~ 200mm/s**:
-        - **마킹 깊이: 16 ~ 72μm**:            
+        - **마킹 깊이: 16 ~ 72µm**:            
         """)
         safe_image("images/mark1.JPG", caption="마킹 공정 변수 상관관계 근거", use_container_width=True)
         safe_image("images/mark2.JPG", caption="마킹 공정 변수 상관관계 근거", use_container_width=True)
@@ -699,12 +705,13 @@ def page_prediction():
                     """)
         else:
             st.warning("⚠️ 먼저 '불량률 예측하기' 버튼을 클릭해 주세요.")
+
 def page_analysis():
-    st.title("?? 특정 공정 분석")
+    st.title("🔍 특정 공정 분석")
     df = pd.read_csv("data/가상_공정_데이터.csv")
     models = load_models()
 
-    st.subheader("?? 변수별 불량률 영향도")
+    st.subheader("📈 변수별 불량률 영향도")
     selected_var = st.selectbox("불량률 그래프를 보고 싶은 변수 선택", input_cols)
 
     # 사용자 입력 슬라이더 생성
@@ -727,23 +734,23 @@ def page_analysis():
 
         user_input.append(val)
 
-    if st.button("?? 그래프 보기"):
+    if st.button("🔍 그래프 보기"):
         fig_proc, fig_total, fig_corr_proc = plot_defect_trend(selected_var, user_input, df, models)
-        st.markdown("**?? 전체 불량률 기준 그래프**")
+        st.markdown("**📊 전체 불량률 기준 그래프**")
         st.pyplot(fig_total)
-        st.markdown("**?? 해당 공정 불량률 기준 그래프**")
+        st.markdown("**🔬 해당 공정 불량률 기준 그래프**")
         st.pyplot(fig_proc)
-        st.markdown("**?? 상관관계 반영 해당 공정 불량률 그래프**")
+        st.markdown("**🧩 상관관계 반영 해당 공정 불량률 그래프**")
         st.pyplot(fig_corr_proc)
 
     st.markdown("---")
-    st.subheader("?? 2D 변수 시각화")
+    st.subheader("📊 2D 변수 시각화")
 
     all_columns = input_cols + detail_cols + target_cols + ["final_defect"]
     x_var = st.selectbox("X축 선택", all_columns, index=0)
     y_var = st.selectbox("Y축 선택", all_columns, index=1)
 
-    if st.button("?? 2D 분포 시각화"):
+    if st.button("🎨 2D 분포 시각화"):
         # x축 값 생성
         if x_var in df.columns:
             x_vals = df[x_var].values
@@ -778,23 +785,23 @@ def page_analysis():
         ax.legend()
         st.pyplot(fig)
 
-        st.markdown("### ?? 입력값 기준 출력")
+        st.markdown("### 📌 입력값 기준 출력")
         if x_var not in input_cols:
-            st.write(f"?? {x_var}: {user_x * 100:.4f}%" if "defect" in x_var else f"{x_var}: {user_x:.4f}")
+            st.write(f"🔹 {x_var}: {user_x * 100:.4f}%" if "defect" in x_var else f"{x_var}: {user_x:.4f}")
         if y_var not in input_cols:
-            st.write(f"?? {y_var}: {user_y * 100:.4f}%" if "defect" in y_var else f"{y_var}: {user_y:.4f}")
+            st.write(f"🔹 {y_var}: {user_y * 100:.4f}%" if "defect" in y_var else f"{y_var}: {user_y:.4f}")
 
-        st.markdown("### ?? 전체 불량률 요약")
+        st.markdown("### 📊 전체 불량률 요약")
         for col in target_cols:
             st.write(f"{col}: {result[col]*100:.4f}%")
-        st.success(f"?? 총 불량률: {result['final_defect']*100:.4f}%")
+        st.success(f"🎯 총 불량률: {result['final_defect']*100:.4f}%")
 
 
 
-###  메인 함수: 페이지 선택 구조 추가
+### 🧠 메인 함수: 페이지 선택 구조 추가
 
 def main():
-    st.sidebar.title("메뉴")
+    st.sidebar.title("📂 메뉴")
     page = st.sidebar.selectbox("이동할 페이지 선택", ["홈", "공정별 변수 설정 및 근거","공정별 변수 상관관계 근거","불량률 예측", "특정 공정 분석"])
 
     if page == "홈":
