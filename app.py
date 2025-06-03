@@ -365,7 +365,7 @@ def page_home():
    """)
 
    # 이미지 보여주기
-   st.image("images/Package.JPG", caption="반도체 패키징 공정 전체 흐름", use_column_width=True)
+   st.image("images/Package.JPG", caption="반도체 패키징 공정 전체 흐름", use_container_width=True)
    st.markdown("""
    ---
    ### 🧩 주요 공정 설명
@@ -409,8 +409,8 @@ def page_process_variable_info():
         - **냉각수 유량 (5–20 L/min)**: 
         - **연삭 압력 (10–50 N)**: 
         """)
-        st.image("images/thickness_speed.JPG", caption="백래핑 공정 변수 설정 근거", use_column_width=True)
-        st.image("images/coolant_LAP_pressure.JPG", caption="백래핑 공정 변수 설정 근거", use_column_width=True)
+        st.image("images/thickness_speed.JPG", caption="백래핑 공정 변수 설정 근거", use_container_width=True)
+        st.image("images/coolant_LAP_pressure.JPG", caption="백래핑 공정 변수 설정 근거", use_container_width=True)
 
     elif 공정 == "Sawing (쏘잉)":
         st.header("✂️ 쏘잉 공정 변수 및 근거")
@@ -420,7 +420,7 @@ def page_process_variable_info():
         - **블레이드 회전속도(30,110) (m/s)**:
         - **냉각수 유량(8,20) (L/min)**:          
         """)
-        st.image("images/sawing.JPG", caption="쏘잉 공정 변수 설정 근거", use_column_width=True)
+        st.image("images/sawing.JPG", caption="쏘잉 공정 변수 설정 근거", use_container_width=True)
         
     elif 공정 == "Die Attach (다이 어태치)":
          st.header("✂️ 다이 어태치 공정 변수 및 근거")
@@ -430,8 +430,8 @@ def page_process_variable_info():
          - **접착 시간(10,60) (s)**:
          - **접착제 점도(1000,4000)(Pa·s)**:            
          """)
-         st.image("images/Die_temp.JPG", caption="다이 어태치 공정 변수 설정 근거", use_column_width=True) 
-         st.image("images/Die.JPG", caption="다이 어태치 공정 변수 설정 근거", use_column_width=True)
+         st.image("images/Die_temp.JPG", caption="다이 어태치 공정 변수 설정 근거", use_container_width=True) 
+         st.image("images/Die.JPG", caption="다이 어태치 공정 변수 설정 근거", use_container_width=True)
     
     elif 공정 == "Wire Bonding (와이어 본딩)":
         st.header("✂️ 와이어 본딩 공정 변수 및 근거")
@@ -445,8 +445,8 @@ def page_process_variable_info():
         - **2차 본드 시간 (10~20)ms**:
         - **초음파 주파수 (100,150) kHz**:            
         """)
-        st.image("images/Wire.JPG", caption="와이어 본딩 공정 변수 설정 근거", use_column_width=True)
-        st.image("images/ultra_freq.JPG", caption="와이어 본딩 공정 변수 설정 근거", use_column_width=True)
+        st.image("images/Wire.JPG", caption="와이어 본딩 공정 변수 설정 근거", use_container_width=True)
+        st.image("images/ultra_freq.JPG", caption="와이어 본딩 공정 변수 설정 근거", use_container_width=True)
     
     elif 공정 == "Molding (몰딩)":
          st.header("✂️ 몰딩 공정 변수 및 근거")
@@ -456,9 +456,9 @@ def page_process_variable_info():
          - **몰딩 시간 : 200 ~ 300s**:
          - **몰드 레진 점도 : 10⁷ ~ 10⁸Pa·s**:            
          """)
-         st.image("images/Mold_temp.JPG", caption="몰딩 공정 변수 설정 근거", use_column_width=True)
-         st.image("images/Mold_time.JPG", caption="몰딩 공정 변수 설정 근거", use_column_width=True)
-         st.image("images/resin_viscosity.JPG", caption="몰딩 공정 변수 설정 근거", use_column_width=True)
+         st.image("images/Mold_temp.JPG", caption="몰딩 공정 변수 설정 근거", use_container_width=True)
+         st.image("images/Mold_time.JPG", caption="몰딩 공정 변수 설정 근거", use_container_width=True)
+         st.image("images/resin_viscosity.JPG", caption="몰딩 공정 변수 설정 근거", use_container_width=True)
     
     elif 공정 == "Marking (마킹)":
         st.header("✂️ 마킹 공정 변수 및 근거")
@@ -468,8 +468,8 @@ def page_process_variable_info():
         - **마킹 속도: 67 ~ 200mm/s**:
         - **마킹 깊이: 16 ~ 72µm**:            
         """)
-        st.image("images/mark.JPG", caption="마킹 공정 변수 설정 근거", use_column_width=True)
-        st.image("images/mark_speed.JPG", caption="마킹 공정 변수 설정 근거", use_column_width=True)
+        st.image("images/mark.JPG", caption="마킹 공정 변수 설정 근거", use_container_width=True)
+        st.image("images/mark_speed.JPG", caption="마킹 공정 변수 설정 근거", use_container_width=True)
         
 def page_process_variable_correlation_info():
     st.title("🔍 공정별 변수 상관관계 근거")
@@ -492,11 +492,11 @@ def page_process_variable_correlation_info():
         - **냉각수 유량 (5–20 L/min)**: 
         - **연삭 압력 (10–50 N)**: 
         """)
-        st.image("images/backlap1.JPG", caption="백래핑 공정 변수 상관관계 근거", use_column_width=True)
-        st.image("images/backlap2.JPG", caption="백래핑 공정 변수 상관관계 근거", use_column_width=True)
-        st.image("images/backlap3.JPG", caption="백래핑 공정 변수 상관관계 근거", use_column_width=True)
-        st.image("images/backlap4.JPG", caption="백래핑 공정 변수 상관관계 근거", use_column_width=True)
-        st.image("images/backlap5.JPG", caption="백래핑 공정 변수 상관관계 근거", use_column_width=True)
+        st.image("images/backlap1.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
+        st.image("images/backlap2.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
+        st.image("images/backlap3.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
+        st.image("images/backlap4.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
+        st.image("images/backlap5.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
 
     elif 공정 == "Sawing (쏘잉)":
         st.header("✂️ 쏘잉 공정 변수 상관관계 근거")
@@ -506,9 +506,9 @@ def page_process_variable_correlation_info():
         - **블레이드 회전속도(30,110) (m/s)**:
         - **냉각수 유량(8,20) (L/min)**:          
         """)
-        st.image("images/sawing1.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_column_width=True)
-        st.image("images/sawing2.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_column_width=True)
-        st.image("images/sawing3.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_column_width=True)
+        st.image("images/sawing1.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_container_width=True)
+        st.image("images/sawing2.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_container_width=True)
+        st.image("images/sawing3.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_container_width=True)
         
     elif 공정 == "Die Attach (다이 어태치)":
          st.header("✂️ 다이 어태치 공정 변수 상관관계 근거")
@@ -518,8 +518,8 @@ def page_process_variable_correlation_info():
          - **접착 시간(10,60) (s)**:
          - **접착제 점도(1000,4000)(Pa·s)**:            
          """)
-         st.image("images/dieattach1.JPG", caption="다이 어태치 공정 변수 상관관계 근거", use_column_width=True) 
-         st.image("images/dieattach2.JPG", caption="다이 어태치 공정 변수 상관관계 근거", use_column_width=True)
+         st.image("images/dieattach1.JPG", caption="다이 어태치 공정 변수 상관관계 근거", use_container_width=True) 
+         st.image("images/dieattach2.JPG", caption="다이 어태치 공정 변수 상관관계 근거", use_container_width=True)
     
     elif 공정 == "Wire Bonding (와이어 본딩)":
         st.header("✂️ 와이어 본딩 공정 변수 상관관계 근거")
@@ -533,9 +533,9 @@ def page_process_variable_correlation_info():
         - **2차 본드 시간 (10~20)ms**:
         - **초음파 주파수 (100,150) kHz**:            
         """)
-        st.image("images/wirebond1.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_column_width=True)
-        st.image("images/wirebond2.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_column_width=True)
-        st.image("images/wirebond3.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_column_width=True)
+        st.image("images/wirebond1.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_container_width=True)
+        st.image("images/wirebond2.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_container_width=True)
+        st.image("images/wirebond3.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_container_width=True)
     
     elif 공정 == "Molding (몰딩)":
          st.header("✂️ 몰딩 공정 변수 상관관계 근거")
@@ -545,11 +545,11 @@ def page_process_variable_correlation_info():
          - **몰딩 시간 : 200 ~ 300s**:
          - **몰드 레진 점도 : 10⁷ ~ 10⁸Pa·s**:            
          """)
-         st.image("images/mold1.JPG", caption="몰딩 공정 변수 상관관계 근거", use_column_width=True)
-         st.image("images/mold2.JPG", caption="몰딩 공정 변수 상관관계 근거", use_column_width=True)
-         st.image("images/mold3.JPG", caption="몰딩 공정 변수 상관관계 근거", use_column_width=True)
-         st.image("images/mold4.JPG", caption="몰딩 공정 변수 상관관계 근거", use_column_width=True)
-         st.image("images/mold5.JPG", caption="몰딩 공정 변수 상관관계 근거", use_column_width=True)
+         st.image("images/mold1.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
+         st.image("images/mold2.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
+         st.image("images/mold3.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
+         st.image("images/mold4.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
+         st.image("images/mold5.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
     
     elif 공정 == "Marking (마킹)":
         st.header("✂️ 마킹 공정 변수 상관관계 근거")
@@ -559,8 +559,8 @@ def page_process_variable_correlation_info():
         - **마킹 속도: 67 ~ 200mm/s**:
         - **마킹 깊이: 16 ~ 72µm**:            
         """)
-        st.image("images/mark1.JPG", caption="마킹 공정 변수 상관관계 근거", use_column_width=True)
-        st.image("images/mark2.JPG", caption="마킹 공정 변수 상관관계 근거", use_column_width=True)
+        st.image("images/mark1.JPG", caption="마킹 공정 변수 상관관계 근거", use_container_width=True)
+        st.image("images/mark2.JPG", caption="마킹 공정 변수 상관관계 근거", use_container_width=True)
 
 
 def page_prediction():
