@@ -464,7 +464,7 @@ Anaconda Spyder 프로그램을 통해 실제 논문 데이터를 기반으로 �
 향후 연구에서는 더 많은 공정변수를 포함하여 모델의 정확성을 더욱 향상시킬 필요가 있습니다.  """)
     
   # 이미지 보여주기
-safe_image("images/package1.JPG", caption="반도체 패키징 공정 불량 예측 프로그램 연구 흐름도", use_container_width=True)    
+safe_image("images/pakage1.JPG", caption="반도체 패키징 공정 불량 예측 프로그램 연구 흐름도", use_container_width=True)    
 
 st.markdown("""
    ---
