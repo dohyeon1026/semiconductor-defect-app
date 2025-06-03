@@ -137,47 +137,17 @@ variable_to_target = {
     'mark_fab_humidity': ['marking_defect']
 }
 
-# --- 모델 불러오기 ---
-import os
-
-@st.cache_resource
-def load_models():
-    models = {}
-    base_path = os.path.dirname(os.path.abspath(__file__))  # app.py의 절대 경로
-    for col in target_cols:
-        model_path = os.path.join(base_path, "model", f"{col}_model.pkl")
-        models[col] = joblib.load(model_path)
-    return models
-
-# --- 예측 함수 ---
-def predict_all(input_data, full_df, models):
-    row = pd.DataFrame([input_data], columns=input_cols)
-    result = {}
-    for col in target_cols:
-        result[col] = round(models[col].predict(row)[0], 6)
-    normal_probs = [1 - result[t] for t in target_cols]
-    result['final_defect'] = round(1 - np.prod(normal_probs), 6)
-    dist = ((full_df[input_cols] - row.iloc[0])**2).sum(axis=1)
-    closest_row = full_df.iloc[dist.idxmin()]
-    for d_col in detail_cols:
-        result[d_col] = round(closest_row[d_col], 6)
-    return result
-
-# --- 조정 제안 함수 (변경: 중요도 → 실제 영향 기준) ---
 def suggest_adjustments(models, user_input):
     suggestions = {}
     for col in target_cols:
         model = models[col]
         if hasattr(model, 'feature_importances_'):
-            min_val = float('inf')
-            best_val = None
-            most_impact_var = None
             current_vals = dict(zip(input_cols, user_input))
-
-            # 각 변수에 대해 현재값 유지 + 하나씩 바꿔가며 영향 평가
             impacts = {}
-            for i, var in enumerate(input_cols):
-                vals = np.linspace(range_dict[var][0], range_dict[var][1], 20)
+
+            # 변수별 영향 평가 샘플 수 축소
+            for var in input_cols:
+                vals = np.linspace(range_dict[var][0], range_dict[var][1], 10)
                 preds = []
                 for v in vals:
                     temp_input = current_vals.copy()
@@ -187,16 +157,14 @@ def suggest_adjustments(models, user_input):
                     row.columns = input_cols
                     pred = model.predict(row)[0]
                     preds.append(pred)
-                impact = max(preds) - min(preds)
-                impacts[var] = impact
+                impacts[var] = max(preds) - min(preds)
 
-            # 가장 영향이 큰 변수 찾기
             most_impact_var = max(impacts, key=impacts.get)
             current_val = current_vals[most_impact_var]
             min_v, max_v = range_dict[most_impact_var]
 
-            # 최적값 탐색
-            scan_vals = np.linspace(min_v, max_v, 50)
+            # 최적값 탐색 샘플 수 축소
+            scan_vals = np.linspace(min_v, max_v, 20)
             min_defect = float('inf')
             optimal_val = current_val
             for v in scan_vals:
