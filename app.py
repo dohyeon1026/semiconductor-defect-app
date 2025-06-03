@@ -169,7 +169,7 @@ def predict_all(input_data, full_df, models):
 
 @st.cache_data
 def suggest_adjustments_cached(user_input_tuple):
-    models = load_models()  # 캐시된 모델 내부에서 불러옴
+    models = load_models()
     current_vals = dict(zip(input_cols, list(user_input_tuple)))
     suggestions = {}
 
@@ -210,9 +210,8 @@ def suggest_adjustments_cached(user_input_tuple):
             "current": current_val,
             "optimal": optimal_val,
             "suggestion": f"'{most_impact_var}' 값을 {optimal_val:.2f}로 설정하면 불량률을 최소화할 수 있습니다."
-}
-
-        return suggestions
+        }
+    return suggestions
 
 def apply_correlation(variable_name, value, base_input):
     updated = base_input.copy()
