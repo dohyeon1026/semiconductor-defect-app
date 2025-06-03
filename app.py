@@ -24,6 +24,13 @@ plt.rcParams['axes.unicode_minus'] = False
 
 st.set_page_config(layout="wide")
 
+# 이미지 안전 표시 함수 (Streamlit 버전에 따라 대응)
+def safe_image(path, caption="", **kwargs):
+    try:
+        st.image(path, caption=caption, use_container_width=True, **kwargs)
+    except TypeError:
+        st.image(path, caption=caption, **kwargs)
+
 # 1. 공정 변수 리스트
 input_cols = [
     'thickness', 'speed', 'coolant', 'LAP_pressure', 'fab_temp', 'fab_humidity',
@@ -155,6 +162,61 @@ def predict_all(input_data, full_df, models):
     for d_col in detail_cols:
         result[d_col] = round(closest_row[d_col], 6)
     return result
+
+# --- 조정 제안 함수 (변경: 중요도 → 실제 영향 기준) ---
+def suggest_adjustments(models, user_input):
+    suggestions = {}
+    for col in target_cols:
+        model = models[col]
+        if hasattr(model, 'feature_importances_'):
+            min_val = float('inf')
+            best_val = None
+            most_impact_var = None
+            current_vals = dict(zip(input_cols, user_input))
+
+            # 각 변수에 대해 현재값 유지 + 하나씩 바꿔가며 영향 평가
+            impacts = {}
+            for i, var in enumerate(input_cols):
+                vals = np.linspace(range_dict[var][0], range_dict[var][1], 20)
+                preds = []
+                for v in vals:
+                    temp_input = current_vals.copy()
+                    temp_input[var] = v
+                    temp_input = apply_all_correlations(temp_input)
+                    row = pd.DataFrame([temp_input[col] for col in input_cols]).T
+                    row.columns = input_cols
+                    pred = model.predict(row)[0]
+                    preds.append(pred)
+                impact = max(preds) - min(preds)
+                impacts[var] = impact
+
+            # 가장 영향이 큰 변수 찾기
+            most_impact_var = max(impacts, key=impacts.get)
+            current_val = current_vals[most_impact_var]
+            min_v, max_v = range_dict[most_impact_var]
+
+            # 최적값 탐색
+            scan_vals = np.linspace(min_v, max_v, 50)
+            min_defect = float('inf')
+            optimal_val = current_val
+            for v in scan_vals:
+                temp_input = current_vals.copy()
+                temp_input[most_impact_var] = v
+                temp_input = apply_all_correlations(temp_input)
+                row = pd.DataFrame([temp_input[col] for col in input_cols]).T
+                row.columns = input_cols
+                pred = model.predict(row)[0]
+                if pred < min_defect:
+                    min_defect = pred
+                    optimal_val = v
+
+            suggestions[col] = {
+                "variable": most_impact_var,
+                "current": current_val,
+                "optimal": optimal_val,
+                "suggestion": f"'{most_impact_var}' 값을 {optimal_val:.2f}로 설정하면 불량률을 최소화할 수 있습니다."
+            }
+    return suggestions
 
 def apply_correlation(variable_name, value, base_input):
     updated = base_input.copy()
@@ -365,7 +427,7 @@ def page_home():
    """)
 
    # 이미지 보여주기
-   st.image("images/Package.JPG", caption="반도체 패키징 공정 전체 흐름", use_container_width=True)
+   safe_image("images/Package.JPG", caption="반도체 패키징 공정 전체 흐름", use_container_width=True)
    st.markdown("""
    ---
    ### 🧩 주요 공정 설명
@@ -409,8 +471,8 @@ def page_process_variable_info():
         - **냉각수 유량 (5–20 L/min)**: 
         - **연삭 압력 (10–50 N)**: 
         """)
-        st.image("images/thickness_speed.JPG", caption="백래핑 공정 변수 설정 근거", use_container_width=True)
-        st.image("images/coolant_LAP_pressure.JPG", caption="백래핑 공정 변수 설정 근거", use_container_width=True)
+        safe_image("images/thickness_speed.JPG", caption="백래핑 공정 변수 설정 근거", use_container_width=True)
+        safe_image("images/coolant_LAP_pressure.JPG", caption="백래핑 공정 변수 설정 근거", use_container_width=True)
 
     elif 공정 == "Sawing (쏘잉)":
         st.header("✂️ 쏘잉 공정 변수 및 근거")
@@ -420,7 +482,7 @@ def page_process_variable_info():
         - **블레이드 회전속도(30,110) (m/s)**:
         - **냉각수 유량(8,20) (L/min)**:          
         """)
-        st.image("images/sawing.JPG", caption="쏘잉 공정 변수 설정 근거", use_container_width=True)
+        safe_image("images/sawing.JPG", caption="쏘잉 공정 변수 설정 근거", use_container_width=True)
         
     elif 공정 == "Die Attach (다이 어태치)":
          st.header("✂️ 다이 어태치 공정 변수 및 근거")
@@ -430,8 +492,8 @@ def page_process_variable_info():
          - **접착 시간(10,60) (s)**:
          - **접착제 점도(1000,4000)(Pa·s)**:            
          """)
-         st.image("images/Die_temp.JPG", caption="다이 어태치 공정 변수 설정 근거", use_container_width=True) 
-         st.image("images/Die.JPG", caption="다이 어태치 공정 변수 설정 근거", use_container_width=True)
+         safe_image("images/Die_temp.JPG", caption="다이 어태치 공정 변수 설정 근거", use_container_width=True) 
+         safe_image("images/Die.JPG", caption="다이 어태치 공정 변수 설정 근거", use_container_width=True)
     
     elif 공정 == "Wire Bonding (와이어 본딩)":
         st.header("✂️ 와이어 본딩 공정 변수 및 근거")
@@ -445,8 +507,8 @@ def page_process_variable_info():
         - **2차 본드 시간 (10~20)ms**:
         - **초음파 주파수 (100,150) kHz**:            
         """)
-        st.image("images/Wire.JPG", caption="와이어 본딩 공정 변수 설정 근거", use_container_width=True)
-        st.image("images/ultra_freq.JPG", caption="와이어 본딩 공정 변수 설정 근거", use_container_width=True)
+        safe_image("images/Wire.JPG", caption="와이어 본딩 공정 변수 설정 근거", use_container_width=True)
+        safe_image("images/ultra_freq.JPG", caption="와이어 본딩 공정 변수 설정 근거", use_container_width=True)
     
     elif 공정 == "Molding (몰딩)":
          st.header("✂️ 몰딩 공정 변수 및 근거")
@@ -456,9 +518,9 @@ def page_process_variable_info():
          - **몰딩 시간 : 200 ~ 300s**:
          - **몰드 레진 점도 : 10⁷ ~ 10⁸Pa·s**:            
          """)
-         st.image("images/Mold_temp.JPG", caption="몰딩 공정 변수 설정 근거", use_container_width=True)
-         st.image("images/Mold_time.JPG", caption="몰딩 공정 변수 설정 근거", use_container_width=True)
-         st.image("images/resin_viscosity.JPG", caption="몰딩 공정 변수 설정 근거", use_container_width=True)
+         safe_image("images/Mold_temp.JPG", caption="몰딩 공정 변수 설정 근거", use_container_width=True)
+         safe_image("images/Mold_time.JPG", caption="몰딩 공정 변수 설정 근거", use_container_width=True)
+         safe_image("images/resin_viscosity.JPG", caption="몰딩 공정 변수 설정 근거", use_container_width=True)
     
     elif 공정 == "Marking (마킹)":
         st.header("✂️ 마킹 공정 변수 및 근거")
@@ -468,8 +530,8 @@ def page_process_variable_info():
         - **마킹 속도: 67 ~ 200mm/s**:
         - **마킹 깊이: 16 ~ 72µm**:            
         """)
-        st.image("images/mark.JPG", caption="마킹 공정 변수 설정 근거", use_container_width=True)
-        st.image("images/mark_speed.JPG", caption="마킹 공정 변수 설정 근거", use_container_width=True)
+        safe_image("images/mark.JPG", caption="마킹 공정 변수 설정 근거", use_container_width=True)
+        safe_image("images/mark_speed.JPG", caption="마킹 공정 변수 설정 근거", use_container_width=True)
         
 def page_process_variable_correlation_info():
     st.title("🔍 공정별 변수 상관관계 근거")
@@ -492,11 +554,11 @@ def page_process_variable_correlation_info():
         - **냉각수 유량 (5–20 L/min)**: 
         - **연삭 압력 (10–50 N)**: 
         """)
-        st.image("images/backlap1.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
-        st.image("images/backlap2.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
-        st.image("images/backlap3.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
-        st.image("images/backlap4.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
-        st.image("images/backlap5.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
+        safe_image("images/backlap1.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
+        safe_image("images/backlap2.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
+        safe_image("images/backlap3.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
+        safe_image("images/backlap4.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
+        safe_image("images/backlap5.JPG", caption="백래핑 공정 변수 상관관계 근거", use_container_width=True)
 
     elif 공정 == "Sawing (쏘잉)":
         st.header("✂️ 쏘잉 공정 변수 상관관계 근거")
@@ -506,9 +568,9 @@ def page_process_variable_correlation_info():
         - **블레이드 회전속도(30,110) (m/s)**:
         - **냉각수 유량(8,20) (L/min)**:          
         """)
-        st.image("images/sawing1.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_container_width=True)
-        st.image("images/sawing2.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_container_width=True)
-        st.image("images/sawing3.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_container_width=True)
+        safe_image("images/sawing1.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_container_width=True)
+        safe_image("images/sawing2.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_container_width=True)
+        safe_image("images/sawing3.JPG", caption="쏘잉 공정 변수 상관관계 근거", use_container_width=True)
         
     elif 공정 == "Die Attach (다이 어태치)":
          st.header("✂️ 다이 어태치 공정 변수 상관관계 근거")
@@ -518,8 +580,8 @@ def page_process_variable_correlation_info():
          - **접착 시간(10,60) (s)**:
          - **접착제 점도(1000,4000)(Pa·s)**:            
          """)
-         st.image("images/dieattach1.JPG", caption="다이 어태치 공정 변수 상관관계 근거", use_container_width=True) 
-         st.image("images/dieattach2.JPG", caption="다이 어태치 공정 변수 상관관계 근거", use_container_width=True)
+         safe_image("images/dieattach1.JPG", caption="다이 어태치 공정 변수 상관관계 근거", use_container_width=True) 
+         safe_image("images/dieattach2.JPG", caption="다이 어태치 공정 변수 상관관계 근거", use_container_width=True)
     
     elif 공정 == "Wire Bonding (와이어 본딩)":
         st.header("✂️ 와이어 본딩 공정 변수 상관관계 근거")
@@ -533,9 +595,9 @@ def page_process_variable_correlation_info():
         - **2차 본드 시간 (10~20)ms**:
         - **초음파 주파수 (100,150) kHz**:            
         """)
-        st.image("images/wirebond1.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_container_width=True)
-        st.image("images/wirebond2.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_container_width=True)
-        st.image("images/wirebond3.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_container_width=True)
+        safe_image("images/wirebond1.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_container_width=True)
+        safe_image("images/wirebond2.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_container_width=True)
+        safe_image("images/wirebond3.JPG", caption="와이어 본딩 공정 변수 상관관계 근거", use_container_width=True)
     
     elif 공정 == "Molding (몰딩)":
          st.header("✂️ 몰딩 공정 변수 상관관계 근거")
@@ -545,11 +607,11 @@ def page_process_variable_correlation_info():
          - **몰딩 시간 : 200 ~ 300s**:
          - **몰드 레진 점도 : 10⁷ ~ 10⁸Pa·s**:            
          """)
-         st.image("images/mold1.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
-         st.image("images/mold2.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
-         st.image("images/mold3.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
-         st.image("images/mold4.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
-         st.image("images/mold5.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
+         safe_image("images/mold1.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
+         safe_image("images/mold2.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
+         safe_image("images/mold3.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
+         safe_image("images/mold4.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
+         safe_image("images/mold5.JPG", caption="몰딩 공정 변수 상관관계 근거", use_container_width=True)
     
     elif 공정 == "Marking (마킹)":
         st.header("✂️ 마킹 공정 변수 상관관계 근거")
@@ -559,8 +621,8 @@ def page_process_variable_correlation_info():
         - **마킹 속도: 67 ~ 200mm/s**:
         - **마킹 깊이: 16 ~ 72µm**:            
         """)
-        st.image("images/mark1.JPG", caption="마킹 공정 변수 상관관계 근거", use_container_width=True)
-        st.image("images/mark2.JPG", caption="마킹 공정 변수 상관관계 근거", use_container_width=True)
+        safe_image("images/mark1.JPG", caption="마킹 공정 변수 상관관계 근거", use_container_width=True)
+        safe_image("images/mark2.JPG", caption="마킹 공정 변수 상관관계 근거", use_container_width=True)
 
 
 def page_prediction():
@@ -610,6 +672,21 @@ def page_prediction():
         st.success(f"✅ 최종 공정 불량률: {result['final_defect']*100:.4f}%")
         for col in target_cols:
             st.write(f"🔸 {col}: {result[col]*100:.4f}%")
+
+ # 🔍 조정 제안 출력
+        st.markdown("---")
+        st.subheader("💡 최적 변수 값 제안 (실제 영향 기준)")
+        suggestions = suggest_adjustments(models, user_input)
+        for col in target_cols:
+            if col in suggestions:
+                s = suggestions[col]
+                st.markdown(f"""
+                **{col}**
+                - 영향 큰 변수: `{s['variable']}`
+                - 현재 값: `{s['current']:.2f}`
+                - 최적 값: `{s['optimal']:.2f}`
+                - 제안: {s['suggestion']}
+                """)
 
         # 조정된 값이 있다면 사용자에게 시각적으로 알려주기
         if len(changed_vars) > 0:
