@@ -167,21 +167,18 @@ def predict_all(input_data, full_df, models):
         result[d_col] = round(closest_row[d_col], 6)
     return result
 
-# --- 조정 제안 함수 (변경: 중요도 → 실제 영향 기준) ---
+# --- 조정 제안 함수 (최적화 버전) ---
 def suggest_adjustments(models, user_input):
     suggestions = {}
     for col in target_cols:
         model = models[col]
         if hasattr(model, 'feature_importances_'):
-            min_val = float('inf')
-            best_val = None
-            most_impact_var = None
             current_vals = dict(zip(input_cols, user_input))
 
-            # 각 변수에 대해 현재값 유지 + 하나씩 바꿔가며 영향 평가
+            # 영향도 분석 (10 step으로 축소)
             impacts = {}
-            for i, var in enumerate(input_cols):
-                vals = np.linspace(range_dict[var][0], range_dict[var][1], 20)
+            for var in input_cols:
+                vals = np.linspace(range_dict[var][0], range_dict[var][1], 10)
                 preds = []
                 for v in vals:
                     temp_input = current_vals.copy()
@@ -191,16 +188,14 @@ def suggest_adjustments(models, user_input):
                     row.columns = input_cols
                     pred = model.predict(row)[0]
                     preds.append(pred)
-                impact = max(preds) - min(preds)
-                impacts[var] = impact
+                impacts[var] = max(preds) - min(preds)
 
-            # 가장 영향이 큰 변수 찾기
             most_impact_var = max(impacts, key=impacts.get)
             current_val = current_vals[most_impact_var]
             min_v, max_v = range_dict[most_impact_var]
 
-            # 최적값 탐색
-            scan_vals = np.linspace(min_v, max_v, 50)
+            # 최적값 탐색 (20 step으로 축소)
+            scan_vals = np.linspace(min_v, max_v, 20)
             min_defect = float('inf')
             optimal_val = current_val
             for v in scan_vals:
@@ -221,6 +216,10 @@ def suggest_adjustments(models, user_input):
                 "suggestion": f"'{most_impact_var}' 값을 {optimal_val:.2f}로 설정하면 불량률을 최소화할 수 있습니다."
             }
     return suggestions
+
+@st.cache_data
+def suggest_adjustments_cached(models, user_input_tuple):
+    return suggest_adjustments(models, list(user_input_tuple))
 
 def apply_correlation(variable_name, value, base_input):
     updated = base_input.copy()
@@ -642,18 +641,17 @@ def page_prediction():
     df = load_data()
     models = load_models()
 
-    # 1. 초기값 설정
+    # 초기값 설정
     for col in input_cols:
         if col not in st.session_state:
             min_val, max_val = range_dict[col]
             st.session_state[col] = float((min_val + max_val) / 2)
 
-    # 2. 입력 위젯 표시
+    # 입력 위젯 표시
     changed_vars = {}
     col1, col2 = st.columns(2)
     for i, col in enumerate(input_cols):
         min_val, max_val = range_dict[col]
-
         with (col1 if i % 2 == 0 else col2):
             new_val = st.number_input(
                 f"{col} ({min_val}~{max_val})",
@@ -664,29 +662,37 @@ def page_prediction():
             if abs(new_val - st.session_state[col]) > 1e-6:
                 changed_vars[col] = new_val
 
-    # 3. 상관관계에 따른 자동 조정값 계산 (단, 위젯 값은 직접 수정 ❌)
+    # 상관관계 보정값 계산
     adjusted_values = {col: st.session_state[col] for col in input_cols}
     for changed_col, changed_val in changed_vars.items():
-        correlation_updates = apply_correlation(changed_col, changed_val, adjusted_values)
-        adjusted_values.update(correlation_updates)
+        adjusted_values.update(apply_correlation(changed_col, changed_val, adjusted_values))
 
-    # 4. 예측 버튼
+    # 불량률 예측 버튼
     if st.button("🚀 불량률 예측하기"):
         user_input = [adjusted_values[col] for col in input_cols]
-       
-        # ✅ 보정된 입력을 세션에 저장 (다른 페이지에서 사용 가능)
         st.session_state["adjusted_input"] = adjusted_values.copy()
-
         result = predict_all(user_input, df, models)
 
         st.success(f"✅ 최종 공정 불량률: {result['final_defect']*100:.4f}%")
         for col in target_cols:
             st.write(f"🔸 {col}: {result[col]*100:.4f}%")
 
- # 🔍 조정 제안 출력
+        if len(changed_vars) > 0:
+            st.markdown("---")
+            st.subheader("🔧 자동 보정된 변수들:")
+            for col in input_cols:
+                original = st.session_state[col]
+                adjusted = adjusted_values[col]
+                if abs(original - adjusted) > 1e-6:
+                    st.write(f"🔁 **{col}**: 입력값 {original:.4f} → 보정값 {adjusted:.4f}")
+
+    # 조정 제안 버튼 (따로 실행)
+    if st.button("🧠 조정 제안 보기"):
+        user_input = [adjusted_values[col] for col in input_cols]
+        suggestions = suggest_adjustments_cached(models, tuple(user_input))
+
         st.markdown("---")
         st.subheader("💡 최적 변수 값 제안 (실제 영향 기준)")
-        suggestions = suggest_adjustments(models, user_input)
         for col in target_cols:
             if col in suggestions:
                 s = suggestions[col]
@@ -697,17 +703,7 @@ def page_prediction():
                 - 최적 값: `{s['optimal']:.2f}`
                 - 제안: {s['suggestion']}
                 """)
-
-        # 조정된 값이 있다면 사용자에게 시각적으로 알려주기
-        if len(changed_vars) > 0:
-            st.markdown("---")
-            st.subheader("🔧 자동 보정된 변수들:")
-            for col in input_cols:
-                original = st.session_state[col]
-                adjusted = adjusted_values[col]
-                if abs(original - adjusted) > 1e-6:
-                    st.write(f"🔁 **{col}**: 입력값 {original:.4f} → 보정값 {adjusted:.4f}")
-
+                
 def page_analysis():
     st.title("🔍 특정 공정 분석")
     df = pd.read_csv("data/가상_공정_데이터.csv")
