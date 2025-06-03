@@ -181,7 +181,7 @@ def suggest_adjustments(models, user_input):
             # 각 변수에 대해 현재값 유지 + 하나씩 바꿔가며 영향 평가
             impacts = {}
             for i, var in enumerate(input_cols):
-                vals = np.linspace(range_dict[var][0], range_dict[var][1], 10)
+                vals = np.linspace(range_dict[var][0], range_dict[var][1], 20)
                 preds = []
                 for v in vals:
                     temp_input = current_vals.copy()
@@ -200,7 +200,7 @@ def suggest_adjustments(models, user_input):
             min_v, max_v = range_dict[most_impact_var]
 
             # 최적값 탐색
-            scan_vals = np.linspace(min_v, max_v, 20)
+            scan_vals = np.linspace(min_v, max_v, 50)
             min_defect = float('inf')
             optimal_val = current_val
             for v in scan_vals:
