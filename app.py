@@ -140,6 +140,10 @@ variable_to_target = {
 # --- 모델 불러오기 ---
 import os
 
+@st.cache_data
+def load_data():
+    return pd.read_csv("data/가상_공정_데이터.csv")
+
 @st.cache_resource
 def load_models():
     models = {}
@@ -635,7 +639,7 @@ def page_prediction():
     st.title("📦 불량률 예측")
     st.markdown("총 40개 이상의 공정 변수를 입력하면, 일부 변수는 상관관계에 따라 자동으로 보정됩니다.")
 
-    df = pd.read_csv("data/가상_공정_데이터.csv")
+    df = load_data()
     models = load_models()
 
     # 1. 초기값 설정
