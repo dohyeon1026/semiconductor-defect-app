@@ -17,7 +17,7 @@ if os.path.exists(font_path):
     font_name = font_manager.FontProperties(fname=font_path).get_name()
     rc('font', family=font_name)
 else:
-    print("⚠️ 폰트 파일을 찾을 수 없습니다:", font_path)
+    print("?? 폰트 파일을 찾을 수 없습니다:", font_path)
 
 # 마이너스 기호가 깨지는 현상 방지
 plt.rcParams['axes.unicode_minus'] = False
