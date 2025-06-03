@@ -35,9 +35,9 @@ def safe_image(path, caption="", **kwargs):
 @st.cache_resource
 def load_models():
     return {
-        "Backgrind": joblib.load("backgrind_defect_model.pkl"),
+        "Backgrind": joblib.load("backlap_defect_model.pkl"),
         "Sawing": joblib.load("sawing_defect_model.pkl"),
-        "DieAttach": joblib.load("die_attach_defect_model.pkl"),
+        "DieAttach": joblib.load("dieattach_defect_model.pkl"),
         "WireBonding": joblib.load("wirebond_defect_model.pkl"),
         "Molding": joblib.load("molding_defect_model.pkl"),
         "Marking": joblib.load("marking_defect_model.pkl")
