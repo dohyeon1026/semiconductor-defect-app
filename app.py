@@ -634,7 +634,6 @@ def page_prediction():
     df = load_data()
     models = load_models()
 
-    # 세션 상태 초기화
     if "show_suggestions" not in st.session_state:
         st.session_state["show_suggestions"] = False
 
@@ -644,7 +643,6 @@ def page_prediction():
             min_val, max_val = range_dict[col]
             st.session_state[col] = float((min_val + max_val) / 2)
 
-    # 입력 위젯 표시 및 변경 추적
     changed_vars = {}
     col1, col2 = st.columns(2)
     for i, col in enumerate(input_cols):
@@ -653,6 +651,8 @@ def page_prediction():
             new_val = st.number_input(f"{col} ({min_val}~{max_val})", float(min_val), float(max_val), key=col)
             if abs(new_val - st.session_state[col]) > 1e-6:
                 changed_vars[col] = new_val
+                # 변수 변경되면 조정 제안 숨김 처리
+                st.session_state["show_suggestions"] = False
 
     # 보정값 계산
     adjusted_values = {col: st.session_state[col] for col in input_cols}
@@ -678,11 +678,11 @@ def page_prediction():
                 if abs(original - adjusted) > 1e-6:
                     st.write(f"🔁 **{col}**: 입력값 {original:.4f} → 보정값 {adjusted:.4f}")
 
-    # 조정 제안 보기 버튼
+    # 조정 제안 보기 버튼 — 클릭 시에만 활성화
     if st.button("🧠 조정 제안 보기"):
         st.session_state["show_suggestions"] = True
 
-    # 조정 제안 출력
+    # 조정 제안 출력 (버튼 클릭 시에만)
     if st.session_state["show_suggestions"]:
         with st.spinner("🔍 최적 변수 조합을 분석 중입니다..."):
             user_input = [adjusted_values[col] for col in input_cols]
@@ -690,6 +690,7 @@ def page_prediction():
 
             st.markdown("---")
             st.subheader("💡 최적 변수 값 제안 (실제 영향 기준)")
+            # 모든 공정 변수 포함하여 제안 출력
             for col in target_cols:
                 if col in suggestions:
                     s = suggestions[col]
