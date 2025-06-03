@@ -325,11 +325,13 @@ def apply_all_correlations(base_input, max_iter=20, tol=1e-12):
 def get_related_targets(variable):
     return variable_to_target.get(variable, target_cols)
                                   
-def plot_defect_trend(variable_name, user_input, df, models):
+@st.cache_data(show_spinner=False)
+def cached_plot_defect_trend(variable_name, user_input_tuple, df, models):
+    # user_input이 리스트라면 튜플로 바꿔서 캐싱 가능하도록 한다고 가정
+    user_input = list(user_input_tuple)
     base_input = dict(zip(input_cols, user_input))
     values = np.linspace(range_dict[variable_name][0], range_dict[variable_name][1], 100)
 
-    # 1) 공정별 불량률 예측
     related_targets = get_related_targets(variable_name)
     proc_preds = {target: [] for target in related_targets}
     for val in values:
@@ -340,7 +342,6 @@ def plot_defect_trend(variable_name, user_input, df, models):
             proc_pred = models[target].predict(row)[0]
             proc_preds[target].append(proc_pred * 100)
 
-    # 2) 전체 불량률 예측
     total_preds = []
     for val in values:
         temp_input = base_input.copy()
@@ -349,7 +350,6 @@ def plot_defect_trend(variable_name, user_input, df, models):
         pred_total = 1 - np.prod([1 - models[col].predict(row)[0] for col in target_cols])
         total_preds.append(pred_total * 100)
 
-    # 3) 상관관계 반영 전체 불량률 예측
     total_preds_corr = []
     for val in values:
         corr_input = apply_correlation(variable_name, val, base_input)
@@ -357,7 +357,7 @@ def plot_defect_trend(variable_name, user_input, df, models):
         pred_corr = 1 - np.prod([1 - models[col].predict(row_corr)[0] for col in target_cols])
         total_preds_corr.append(pred_corr * 100)
 
-    # 그래프1: 공정별 불량률
+    # 그래프 생성 부분은 캐싱에서 빼도 된다 (복잡도 적음)
     fig_proc, ax_proc = plt.subplots(figsize=(8, 4))
     for target in related_targets:
         ax_proc.plot(values, proc_preds[target], label=f"{target} 불량률 (%)")
@@ -370,7 +370,6 @@ def plot_defect_trend(variable_name, user_input, df, models):
     ax_proc.legend()
     ax_proc.grid(True)
 
-    # 그래프2: 전체 불량률
     fig_total, ax_total = plt.subplots(figsize=(8, 4))
     ax_total.plot(values, total_preds, label="전체 불량률 (%)", color='tab:red')
     ax_total.scatter([base_input[variable_name]], [total_preds[idx]], color='red', s=50)
@@ -380,7 +379,6 @@ def plot_defect_trend(variable_name, user_input, df, models):
     ax_total.legend()
     ax_total.grid(True)
 
-    # 그래프3: 공정 변수 → 공정별 불량률 (기본 vs 상관관계 반영)
     fig_corr_proc, ax_corr_proc = plt.subplots(figsize=(8, 4))
     for target in related_targets:
         base_preds = proc_preds[target]
@@ -404,7 +402,6 @@ def plot_defect_trend(variable_name, user_input, df, models):
     ax_corr_proc.legend()
     ax_corr_proc.grid(True)
 
-    # 반환
     return fig_proc, fig_total, fig_corr_proc
 
 
@@ -633,8 +630,10 @@ def page_prediction():
     df = load_data()
     models = load_models()
 
-    if "show_suggestions" not in st.session_state:
+    # 페이지 진입 시 조정 제안 숨기기 초기화
+    if "show_suggestions" not in st.session_state or st.session_state.get("page_prediction_loaded", False) == False:
         st.session_state["show_suggestions"] = False
+        st.session_state["page_prediction_loaded"] = True
 
     # 초기값 설정
     for col in input_cols:
@@ -731,7 +730,8 @@ def page_analysis():
         user_input.append(val)
 
     if st.button("🔍 그래프 보기"):
-        fig_proc, fig_total, fig_corr_proc = plot_defect_trend(selected_var, user_input, df, models)
+        user_input_tuple = tuple(user_input)
+        fig_proc, fig_total, fig_corr_proc = cached_plot_defect_trend(selected_var, user_input_tuple, df, models)
         st.markdown("**📊 전체 불량률 기준 그래프**")
         st.pyplot(fig_total)
         st.markdown("**🔬 해당 공정 불량률 기준 그래프**")
