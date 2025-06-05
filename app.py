@@ -17,7 +17,7 @@ if os.path.exists(font_path):
     font_name = font_manager.FontProperties(fname=font_path).get_name()
     rc('font', family=font_name)
 else:
-    print("?? 폰트 파일을 찾을 수 없습니다:", font_path)
+    print("⚠️ 폰트 파일을 찾을 수 없습니다:", font_path)
 
 # 마이너스 기호가 깨지는 현상 방지
 plt.rcParams['axes.unicode_minus'] = False
@@ -163,60 +163,93 @@ def predict_all(input_data, full_df, models):
         result[d_col] = round(closest_row[d_col], 6)
     return result
 
-# --- 조정 제안 함수 (변경: 중요도 → 실제 영향 기준) ---
+# --- 조정 제안 함수 (무조건 각 공정에서 하나는 추천하되 최적값과의 차이가 있는 변수로) ---
 def suggest_adjustments(models, user_input):
+    from collections import defaultdict
+
+    # target별 입력 변수 매핑 생성
+    target_to_input_vars = defaultdict(list)
+    for var, targets in variable_to_target.items():
+        for t in targets:
+            target_to_input_vars[t].append(var)
+
     suggestions = {}
+    current_vals = dict(zip(input_cols, user_input))
+
     for col in target_cols:
         model = models[col]
-        if hasattr(model, 'feature_importances_'):
-            min_val = float('inf')
-            best_val = None
-            most_impact_var = None
-            current_vals = dict(zip(input_cols, user_input))
+        base_row = pd.DataFrame([current_vals], columns=input_cols)
+        base_pred = model.predict(base_row)[0]
 
-            # 각 변수에 대해 현재값 유지 + 하나씩 바꿔가며 영향 평가
-            impacts = {}
-            for i, var in enumerate(input_cols):
-                vals = np.linspace(range_dict[var][0], range_dict[var][1], 20)
-                preds = []
-                for v in vals:
-                    temp_input = current_vals.copy()
-                    temp_input[var] = v
-                    temp_input = apply_all_correlations(temp_input)
-                    row = pd.DataFrame([temp_input[col] for col in input_cols]).T
-                    row.columns = input_cols
-                    pred = model.predict(row)[0]
-                    preds.append(pred)
-                impact = max(preds) - min(preds)
-                impacts[var] = impact
+        related_vars = target_to_input_vars.get(col, [])
+        if not related_vars:
+            continue
 
-            # 가장 영향이 큰 변수 찾기
-            most_impact_var = max(impacts, key=impacts.get)
-            current_val = current_vals[most_impact_var]
-            min_v, max_v = range_dict[most_impact_var]
+        best_gain = -float('inf')
+        selected_var = None
+        optimal_val = None
+        original_val = None
 
-            # 최적값 탐색
-            scan_vals = np.linspace(min_v, max_v, 50)
-            min_defect = float('inf')
-            optimal_val = current_val
+        for var in related_vars:
+            if var not in input_cols:
+                continue
+
+            cur_val = current_vals[var]
+            min_v, max_v = range_dict[var]
+
+            scan_vals = np.linspace(min_v, max_v, 20)
+
+            best_pred = float('inf')
+            best_v = cur_val
+
             for v in scan_vals:
                 temp_input = current_vals.copy()
-                temp_input[most_impact_var] = v
-                temp_input = apply_all_correlations(temp_input)
-                row = pd.DataFrame([temp_input[col] for col in input_cols]).T
-                row.columns = input_cols
-                pred = model.predict(row)[0]
-                if pred < min_defect:
-                    min_defect = pred
-                    optimal_val = v
+                temp_input[var] = v
 
+                # 한 단계 보정 함수로 교체 (복수 반복 불필요하면)
+                temp_input = apply_correlation(var, v, temp_input)
+
+                row = pd.DataFrame([{k: temp_input[k] for k in input_cols}])
+                pred = model.predict(row)[0]
+
+                if pred < best_pred:
+                    best_pred = pred
+                    best_v = v
+
+            gain = base_pred - best_pred
+
+            # 개선 효과 있고 현재값과 최적값 차이가 있는 경우 후보 선정
+            if abs(cur_val - best_v) > 1e-6 and gain > best_gain:
+                best_gain = gain
+                selected_var = var
+                optimal_val = best_v
+                original_val = cur_val
+
+        # 선택된 변수 있을 때만 suggestions 추가
+        if selected_var is not None:
             suggestions[col] = {
-                "variable": most_impact_var,
-                "current": current_val,
+                "variable": selected_var,
+                "current": original_val,
                 "optimal": optimal_val,
-                "suggestion": f"'{most_impact_var}' 값을 {optimal_val:.2f}로 설정하면 불량률을 최소화할 수 있습니다."
+                "suggestion": f"'{selected_var}' 값을 {optimal_val:.2f}로 설정하면 불량률을 최소화할 수 있습니다."
             }
+        else:
+            # 선택된 변수가 없으면 조정 불필요 표시 (함수 반환용 딕셔너리 형태로)
+            suggestions[col] = {
+                "variable": None,
+                "current": current_vals.get(col, None),
+                "optimal": None,
+                "suggestion": "조정할 변수 없음 (현재값이 최적 또는 영향 미미)"
+            }
+
     return suggestions
+
+
+
+
+
+
+
 
 def apply_correlation(variable_name, value, base_input):
     updated = base_input.copy()
@@ -416,63 +449,39 @@ def plot_defect_trend(variable_name, user_input, df, models):
 
 
 
+# 📁 페이지 구성 함수 정의
 def page_home():
-    st.title("🏠 홈")
-    st.markdown("""
-    ### 📦 반도체 패키징 공정이란?
-    반도체 패키징 공정은 웨이퍼에서 개별 칩을 분리하고 외부 환경으로부터 보호하면서 전기적 연결을 제공하는 일련의 공정입니다.
-    각 공정은 제품의 신뢰성과 성능에 중대한 영향을 미칩니다.
-    아래는 주요 공정의 흐름도입니다.
-    """)
+   st.title("🏠 홈")
+   st.markdown("""
+   ### 📦 반도체 패키징 공정이란?
+   반도체 패키징 공정은 웨이퍼에서 개별 칩을 분리하고 외부 환경으로부터 보호하면서 전기적 연결을 제공하는 일련의 공정입니다.
+   각 공정은 제품의 신뢰성과 성능에 중대한 영향을 미칩니다.
+   아래는 주요 공정의 흐름도입니다.
+   """)
 
-    # 📌 첫 번째 이미지
-    safe_image("images/Package.JPG", caption="반도체 패키징 공정 전체 흐름", use_container_width=True)
+   # 이미지 보여주기
+   safe_image("images/Package.JPG", caption="반도체 패키징 공정 전체 흐름", use_container_width=True)
+   st.markdown("""
+   ---
+   ### 🧩 주요 공정 설명
 
-    st.markdown("""
-    ---
-    ### 🧩 주요 공정 설명
+   - **Backlap (백래핑)**: 웨이퍼의 뒷면을 연마해 두께를 조절하고 스트레스를 해소하는 공정입니다.
+   - **Sawing (쏘잉)**: 개별 칩을 잘라내는 공정입니다.
+   - **Die Attach (다이 어태치)**: 잘라낸 칩을 패키지 기판에 부착합니다.
+   - **Wire Bonding (와이어 본딩)**: 칩과 기판을 금속 와이어로 연결해 전기적 신호를 전달합니다.
+   - **Molding (몰딩)**: 칩을 보호하기 위해 수지로 밀봉합니다.
+   - **Marking (마킹)**: 제품 정보나 로고 등을 인쇄합니다.
+   이러한 공정 중 어느 하나라도 최적 조건을 벗어나면 불량률이 증가하게 됩니다.
+   본 시스템은 각 공정의 변수들을 입력 받아, 예측 모델을 통해 **불량률을 추정**하고 시각화해줍니다.
 
-    - **Backlap (백래핑)**: 웨이퍼의 뒷면을 연마해 두께를 조절하고 스트레스를 해소하는 공정입니다.
-    - **Sawing (쏘잉)**: 개별 칩을 잘라내는 공정입니다.
-    - **Die Attach (다이 어태치)**: 잘라낸 칩을 패키지 기판에 부착합니다.
-    - **Wire Bonding (와이어 본딩)**: 칩과 기판을 금속 와이어로 연결해 전기적 신호를 전달합니다.
-    - **Molding (몰딩)**: 칩을 보호하기 위해 수지로 밀봉합니다.
-    - **Marking (마킹)**: 제품 정보나 로고 등을 인쇄합니다.
-
-    ### 📦 반도체 패키징 공정 불량 예측 시스템이란?
-    1. 공정 과정 및 변수 설정  
-       반도체 패키징 공정은 여러 단계로 구성되며, 각 단계에서 다양한 공정변수가 존재합니다.  
-       본 연구에서는 6개의 주요 공정과정과 40개의 공정변수를 설정하였습니다.  
-       각 공정별로 환경변수를 포함하여 6개의 공정변수와 와이어 본딩 공정에서는 10개의 공정변수를 선택하였습니다.
-
-    2. 데이터 생성 및 분석  
-       Anaconda Spyder 프로그램을 통해 실제 논문 데이터를 기반으로 가상 데이터 10,000개를 생성하였습니다.  
-       이 데이터는 각 공정별 공정변수에 대한 가동 범위와 불량률 함수를 포함하고 있으며, 이를 통해 불량률 예측 모델을 구축하였습니다.
-
-    3. 불량률 예측 및 시각화  
-       생성된 10,000개의 데이터에 기반하여 반도체 패키징 공정의 불량률을 예측할 수 있습니다.  
-       이 프로그램은 특정 조합이나 값에서 불량률이 높은지, 이상치가 있는지, 불량률이 높은 조건을 판별할 수 있는 기능을 제공합니다.  
-       또한, 각 공정 변수의 불량률 그래프와 2D 산점도를 통해 데이터의 시각화를 가능하게 하여 더 상세한 분석을 지원합니다.
-
-    4. 상용화 가능성  
-       이 프로그램은 실제 기업에서 연구하여 직접 공정변수의 범위를 설정하고 재설정할 수 있는 가능성을 고려하고 있습니다.  
-       기업 내 연구팀이 공정 간의 관계와 상관관계를 연구하여 재설정할 수 있도록 하여, 보다 정확한 불량률 예측이 가능해질 것입니다.
-
-    결론  
-    본 문서에서 제시한 반도체 패키징 공정 불량률 예측 프로그램은 공정변수의 세분화와 데이터 시각화를 통해  
-    불량률 예측의 정확성을 높이고, 실제 기업에서의 활용 가능성을 제시합니다.  
-    향후 연구에서는 더 많은 공정변수를 포함하여 모델의 정확성을 더욱 향상시킬 필요가 있습니다.
-    """)
-    # 📌 연구 흐름도 이미지
-    safe_image("images/pakage1.JPG", caption="반도체 패키징 공정 불량 예측 프로그램 연구 흐름도", use_container_width=True)
-    st.markdown("""
-    ---
-    ### 🎯 주요 기능
-    - **가상 실험 환경 제공**: 실제 공정 데이터를 기반으로 구성된 변수 및 상관관계를 반영하여, 다양한 조건에서의 불량률을 시뮬레이션할 수 있습니다.
-    - **공정 최적화 연습**: 변수 조절을 통해 불량률을 최소화하는 조건을 탐색할 수 있으며, 이는 향후 공정 개선 방향 설정에 도움을 줍니다.
-    - **공정 간 상관관계 학습**: 각 공정의 결과가 다음 단계에 어떤 영향을 주는지 직관적으로 이해할 수 있도록 설계되어 공정 엔지니어에게 이해도를 높입니다.
-    """)
+   ### 🎯 주요 기능
    
+   가상 실험 환경 제공: 실제 공정 데이터를 기반으로 구성된 변수 및 상관관계를 반영하여, 다양한 조건에서의 불량률을 시뮬레이션할 수 있습니다.
+
+   공정 최적화 연습: 변수 조절을 통해 불량률을 최소화하는 조건을 탐색할 수 있으며, 이는 향후 공정 개선 방향 설정에 도움을 줍니다.
+
+   공정 간 상관관계 학습: 각 공정의 결과가 다음 단계에 어떤 영향을 주는지 직관적으로 이해할 수 있도록 설계되어 공정 엔지니어에게 이해도를 높입니다.
+   """)
 
 def page_process_variable_info():
     st.title("🔍 공정별 변수 설정 및 근거")
@@ -650,7 +659,7 @@ def page_process_variable_correlation_info():
 
 
 def page_prediction():
-    st.title("🔍 불량률 예측")
+    st.title("📦 불량률 예측")
     st.markdown("총 40개 이상의 공정 변수를 입력하면, 일부 변수는 상관관계에 따라 자동으로 보정됩니다.")
 
     df = pd.read_csv("data/가상_공정_데이터.csv")
@@ -667,7 +676,6 @@ def page_prediction():
     col1, col2 = st.columns(2)
     for i, col in enumerate(input_cols):
         min_val, max_val = range_dict[col]
-
         with (col1 if i % 2 == 0 else col2):
             new_val = st.number_input(
                 f"{col} ({min_val}~{max_val})",
@@ -678,51 +686,57 @@ def page_prediction():
             if abs(new_val - st.session_state[col]) > 1e-6:
                 changed_vars[col] = new_val
 
-    # 3. 상관관계 보정
+    # 3. 상관관계 조정
     adjusted_values = {col: st.session_state[col] for col in input_cols}
     for changed_col, changed_val in changed_vars.items():
         correlation_updates = apply_correlation(changed_col, changed_val, adjusted_values)
         adjusted_values.update(correlation_updates)
 
-    # 4. 예측 버튼
-    if st.button("📊 불량률 예측하기"):
+    # 4. 버튼 눌렀을 때만 실행
+    if st.button("🚀 불량률 예측하기"):
         user_input = [adjusted_values[col] for col in input_cols]
         st.session_state["adjusted_input"] = adjusted_values.copy()
-        st.session_state["last_user_input"] = user_input  # 조정 제안에 사용될 입력 저장
 
         result = predict_all(user_input, df, models)
 
         st.success(f"✅ 최종 공정 불량률: {result['final_defect']*100:.4f}%")
         for col in target_cols:
-            st.write(f"📌 {col}: {result[col]*100:.4f}%")
+            st.write(f"🔸 {col}: {result[col]*100:.4f}%")
 
+        # 🔍 조정 제안 출력 (여기 안에 넣어야 user_input 접근 가능)
+        st.markdown("---")
+        st.subheader("💡 주요 기여 변수 기반 최적 값 제안")
+
+        suggestions = suggest_adjustments(models, user_input)
+        for col in target_cols:
+            if col in suggestions:
+                s = suggestions[col]
+                if s["variable"] is None or (s["optimal"] is not None and abs(s["current"] - s["optimal"]) < 0.01):
+                    st.markdown(f"""
+                    **{col}**
+                    - 조정할 변수 없음 (현재값이 최적 또는 영향 미미)
+                    """)
+                else:
+                    st.markdown(f"""
+                    **{col}**
+                    - 불량률에 가장 크게 기여한 변수: `{s['variable']}`  
+                    - 현재 값: `{s['current']:.2f}`  
+                    - 최적 값: `{s['optimal']:.2f}`  
+                    - 제안: {s['suggestion']}
+                    """)
+
+
+
+
+        # 조정된 값이 있다면 사용자에게 시각적으로 알려주기
         if len(changed_vars) > 0:
             st.markdown("---")
-            st.subheader("🛠️ 자동 보정된 변수들:")
+            st.subheader("🔧 자동 보정된 변수들:")
             for col in input_cols:
                 original = st.session_state[col]
                 adjusted = adjusted_values[col]
                 if abs(original - adjusted) > 1e-6:
-                    st.write(f"🔄 **{col}**: 입력값 {original:.4f} → 보정값 {adjusted:.4f}")
-
-    # 5. 조정 제안 버튼
-    st.markdown("---")
-    if st.button("💡 조정 제안 보기"):
-        if "last_user_input" in st.session_state:
-            suggestions = suggest_adjustments(models, st.session_state["last_user_input"])
-            st.subheader("📌 최적 변수 값 제안 (실제 영향 기준)")
-            for col in target_cols:
-                if col in suggestions:
-                    s = suggestions[col]
-                    st.markdown(f"""
-                    **{col}**
-                    - 영향 큰 변수: `{s['variable']}`
-                    - 현재 값: `{s['current']:.2f}`
-                    - 최적 값: `{s['optimal']:.2f}`
-                    - 제안: {s['suggestion']}
-                    """)
-        else:
-            st.warning("⚠️ 먼저 '불량률 예측하기' 버튼을 클릭해 주세요.")
+                    st.write(f"🔁 **{col}**: 입력값 {original:.4f} → 보정값 {adjusted:.4f}")
 
 def page_analysis():
     st.title("🔍 특정 공정 분석")
