@@ -6,13 +6,21 @@ import os
 import platform
 import matplotlib.pyplot as plt
 from matplotlib import font_manager, rc
+import matplotlib.font_manager as fm
 
 # Windows에서는 'malgun.ttf' (맑은 고딕)를 사용
 if platform.system() == "Windows":
     font_path = "C:/Windows/Fonts/malgun.ttf"
 else:
     font_path = os.path.join("fonts", "malgun.ttf")  # 프로젝트에 복사한 폰트
+    font_path = os.path.join("fonts", "NanumGothic.ttf")  # 폰트는 프로젝트에 포함
+    # 2. 폰트 등록
+    font_name = fm.FontProperties(fname=font_path).get_name()
+    fm.fontManager.addfont(font_path)
 
+    # 3. 폰트 설정
+    plt.rcParams["font.family"] = font_name
+    plt.rcParams["axes.unicode_minus"] = False
 if os.path.exists(font_path):
     font_name = font_manager.FontProperties(fname=font_path).get_name()
     rc('font', family=font_name)
